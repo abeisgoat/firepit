@@ -1,0 +1,30 @@
+{
+  "name": "firepit",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "fmt": "prettier --write *.js",
+    "pkg": "pkg -c package.json firepit.js && chmod +x firepit-*"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "debug": "^4.1.0",
+    "get-installed-path": "^4.0.8",
+    "npm": "^6.5.0",
+    "user-home": "^2.0.0"
+  },
+  "pkg": {
+    "scripts": [
+      "node_modules/npm/src/**/*.js"
+    ],
+    "assets": [
+      "node_modules/npm/bin/**/*",
+      "node_modules/npm/node_modules/node-gyp/**/*"
+    ]
+  },
+  "devDependencies": {
+    "prettier": "^1.15.3"
+  }
+}
