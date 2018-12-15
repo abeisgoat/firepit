@@ -4,7 +4,8 @@ const {
   mkdirSync,
   writeFileSync,
   chmodSync,
-  constants
+  constants,
+    unlinkSync
 } = require("fs");
 const { getInstalledPath } = require("get-installed-path");
 const { fork } = require("child_process");
@@ -16,8 +17,11 @@ const npm = __dirname + "/node_modules/npm/bin/npm-cli";
 (async () => {
   debug("Welcome to trashbin!");
 
+  const isWin = process.platform === "win32";
   const fauxBinsPath = join(homePath, ".cache", "firebase", "bin");
-  process.env.PATH = `${process.env.PATH}:${fauxBinsPath}`;
+  if (!isWin) {
+    process.env.PATH = `${process.env.PATH}:${fauxBinsPath}`;
+  }
   process.env._ = join(fauxBinsPath, "node");
   process.env.NODE = process.env._;
 
@@ -29,7 +33,7 @@ const npm = __dirname + "/node_modules/npm/bin/npm-cli";
     const npmArgs = [
       ...process.argv.slice(breakerIndex),
       "--no-update-notifier",
-      `--script-shell=${fauxBinsPath}/shell`
+      `--script-shell=${fauxBinsPath}/shell${isWin? ".bat" : ""}`
     ];
     debug(npmArgs);
     const cmd = fork(npm, npmArgs, { stdio: "inherit", env: process.env });
@@ -90,9 +94,10 @@ const npm = __dirname + "/node_modules/npm/bin/npm-cli";
 
   if (firebaseToolsBinPaths.length) {
     const fauxBins = {
-      shell: `#!/usr/bin/env bash
+      /* Linux / OSX */
+      "shell": `#!/usr/bin/env bash
 bash "\${\@/*${process.argv[0].split("/").slice(-1)[0]}/node}"`,
-      node: `#!/usr/bin/env bash
+      "node": `#!/usr/bin/env bash
 if [[ "$@" == *"gyp"* ]]; then
   ${process.argv[0]} "$@"
 else
@@ -100,14 +105,25 @@ else
   if ([[ "$@" != /* ]]); then
     ARGS="$PWD/$@"
   fi
-  
-  echo "Old: $@" >> /tmp/fauxnode
-  echo "New: $ARGS" >> /tmp/fauxnode
+
   ${process.argv[0]} $ARGS
 fi`,
-      npm: `${
+      "npm": `${
         process.argv[0]
-      } "/snapshot/npnoo/node_modules/npm/bin/npm-cli" --no-update-notifier --script-shell "${fauxBinsPath}/shell" "$@"`
+      } "/snapshot/npnoo/node_modules/npm/bin/npm-cli" --no-update-notifier --script-shell "${fauxBinsPath}/shell" "$@"`,
+      /* Windows */
+      "node.bat": `${process.argv[0]} %CD%/%*`,
+      "shell.bat": `setlocal ENABLEDELAYEDEXPANSION
+set PATH=%PATH%;${fauxBinsPath}
+set blank=
+set str=%*
+set str=%str:-c=!blank!%
+set node_runtime=node
+set cmd=%str:${process.argv[0]} =!node_runtime!%
+cmd /d /c %cmd%`,
+      "npm.bat": `${
+        process.argv[0]
+        } "/snapshot/npnoo/node_modules/npm/bin/npm-cli" --no-update-notifier --script-shell "${fauxBinsPath}/shell.bat" %*`,
     };
 
     try {
@@ -118,9 +134,16 @@ fi`,
 
     Object.keys(fauxBins).forEach(filename => {
       const fauxBinPath = join(fauxBinsPath, filename);
-      const rwx = constants.S_IRUSR | constants.S_IWUSR | constants.S_IXUSR;
+      try {
+        unlinkSync(fauxBinPath);
+      } catch (err) {
+        debug(err);
+      }
       writeFileSync(fauxBinPath, fauxBins[filename]);
-      chmodSync(fauxBinPath, rwx);
+      if (!isWin) {
+        const rwx = constants.S_IRUSR | constants.S_IWUSR | constants.S_IXUSR;
+        chmodSync(fauxBinPath, rwx);
+      }
     });
 
     const binPath = firebaseToolsBinPaths[0];
