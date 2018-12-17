@@ -1,12 +1,13 @@
 const { join } = require("path");
 const {
   lstatSync,
-  mkdirSync,
   writeFileSync,
   chmodSync,
   constants,
     unlinkSync
 } = require("fs");
+const fs = require("fs");
+const path = require("path");
 const { getInstalledPath } = require("get-installed-path");
 const { fork } = require("child_process");
 const homePath = require("user-home");
@@ -18,8 +19,18 @@ const npm = __dirname + "/node_modules/npm/bin/npm-cli";
   debug("Welcome to trashbin!");
 
   const isWin = process.platform === "win32";
+  const isWriter = process.argv.indexOf("pit:no-write") === -1;
   const fauxBinsPath = join(homePath, ".cache", "firebase", "bin");
-  if (!isWin) {
+
+  if (!isWriter) {
+    process.argv.splice(process.argv.indexOf("pit:no-write"), 1);
+  }
+
+  createFauxBinaries(isWin, isWriter, fauxBinsPath);
+
+  if (isWin) {
+    process.env.PATH = `${process.env.PATH};${fauxBinsPath}`;
+  } else {
     process.env.PATH = `${process.env.PATH}:${fauxBinsPath}`;
   }
   process.env._ = join(fauxBinsPath, "node");
@@ -93,59 +104,6 @@ const npm = __dirname + "/node_modules/npm/bin/npm-cli";
   }
 
   if (firebaseToolsBinPaths.length) {
-    const fauxBins = {
-      /* Linux / OSX */
-      "shell": `#!/usr/bin/env bash
-bash "\${\@/*${process.argv[0].split("/").slice(-1)[0]}/node}"`,
-      "node": `#!/usr/bin/env bash
-if [[ "$@" == *"gyp"* ]]; then
-  ${process.argv[0]} "$@"
-else
-  ARGS="$@"
-  if ([[ "$@" != /* ]]); then
-    ARGS="$PWD/$@"
-  fi
-
-  ${process.argv[0]} $ARGS
-fi`,
-      "npm": `${
-        process.argv[0]
-      } "/snapshot/npnoo/node_modules/npm/bin/npm-cli" --no-update-notifier --script-shell "${fauxBinsPath}/shell" "$@"`,
-      /* Windows */
-      "node.bat": `${process.argv[0]} %CD%/%*`,
-      "shell.bat": `setlocal ENABLEDELAYEDEXPANSION
-set PATH=%PATH%;${fauxBinsPath}
-set blank=
-set str=%*
-set str=%str:-c=!blank!%
-set node_runtime=node
-set cmd=%str:${process.argv[0]} =!node_runtime!%
-cmd /d /c %cmd%`,
-      "npm.bat": `${
-        process.argv[0]
-        } "/snapshot/npnoo/node_modules/npm/bin/npm-cli" --no-update-notifier --script-shell "${fauxBinsPath}/shell.bat" %*`,
-    };
-
-    try {
-      mkdirSync(fauxBinsPath);
-    } catch (err) {
-      debug(err);
-    }
-
-    Object.keys(fauxBins).forEach(filename => {
-      const fauxBinPath = join(fauxBinsPath, filename);
-      try {
-        unlinkSync(fauxBinPath);
-      } catch (err) {
-        debug(err);
-      }
-      writeFileSync(fauxBinPath, fauxBins[filename]);
-      if (!isWin) {
-        const rwx = constants.S_IRUSR | constants.S_IWUSR | constants.S_IXUSR;
-        chmodSync(fauxBinPath, rwx);
-      }
-    });
-
     const binPath = firebaseToolsBinPaths[0];
     debug(`CLI install found at "${binPath}", starting fork...`);
     const cmd = fork(binPath, process.argv.slice(2), { stdio: "inherit" });
@@ -174,3 +132,98 @@ cmd /d /c %cmd%`,
     });
   }
 })();
+
+function createFauxBinaries(isWin, isWriter, fauxBinsPath) {
+  const fauxBins = {
+    /* Linux / OSX */
+    "shell": `#!/usr/bin/env bash
+bash "\${\@/*${process.argv[0].split("/").slice(-1)[0]}/node}"`,
+    "node": `#!/usr/bin/env bash
+if [[ "$@" == *"gyp"* ]]; then
+  ${process.argv[0]} "$@"
+else
+  ARGS="$@"
+  if ([[ "$@" != /* ]]); then
+    ARGS="$PWD/$@"
+  fi
+
+  ${process.argv[0]} $ARGS
+fi`,
+    "npm": `${
+      process.argv[0]
+      } "/snapshot/npnoo/node_modules/npm/bin/npm-cli" --no-update-notifier --script-shell "${fauxBinsPath}/shell" "$@"`,
+    /* Windows */
+    "node.bat": `@echo off
+set str=%*
+call set cmd=%%str:%CD%=%%
+echo %str%
+echo %cmd%
+set cmd=%cmd:"=%
+${process.argv[0]} %CD%\\%CMD%`,
+    "shell.bat": `@echo off
+setlocal ENABLEDELAYEDEXPANSION
+set PATH=%PATH%;${fauxBinsPath}
+set blank=
+set str=%*
+set str=%str:-c=!blank!%
+set node_runtime=node
+set cmd=%str:${process.argv[0]} =!node_runtime! %
+cmd /d /c %cmd%`,
+    "npm.bat": `@echo off
+${
+      process.argv[0]
+      } "/snapshot/npnoo/node_modules/npm/bin/npm-cli" --no-update-notifier --scripts-prepend-node-path="auto" --script-shell "${fauxBinsPath}/shell.bat" %*`,
+  };
+
+  try {
+    mkDirByPathSync(fauxBinsPath);
+  } catch (err) {
+    debug(err);
+  }
+
+  if (isWriter) {
+    Object.keys(fauxBins).forEach(filename => {
+      const fauxBinPath = join(fauxBinsPath, filename);
+      try {
+        unlinkSync(fauxBinPath);
+      } catch (err) {
+        debug(err);
+      }
+      writeFileSync(fauxBinPath, fauxBins[filename]);
+      if (!isWin) {
+        const rwx = constants.S_IRUSR | constants.S_IWUSR | constants.S_IXUSR;
+        chmodSync(fauxBinPath, rwx);
+      }
+    });
+  }
+}
+
+//https://stackoverflow.com/questions/31645738/how-to-create-full-path-with-nodes-fs-mkdirsync
+function mkDirByPathSync(targetDir, { isRelativeToScript = false } = {}) {
+  const sep = path.sep;
+  const initDir = path.isAbsolute(targetDir) ? sep : '';
+  const baseDir = isRelativeToScript ? __dirname : '.';
+
+  return targetDir.split(sep).reduce((parentDir, childDir) => {
+    const curDir = path.resolve(baseDir, parentDir, childDir);
+    try {
+      fs.mkdirSync(curDir);
+    } catch (err) {
+      if (err.code === 'EEXIST') { // curDir already exists!
+        return curDir;
+      }
+
+      // To avoid `EISDIR` error on Mac and `EACCES`-->`ENOENT` and `EPERM` on Windows.
+      if (err.code === 'ENOENT') { // Throw the original parentDir error on curDir `ENOENT` failure.
+        throw new Error(`EACCES: permission denied, mkdir '${parentDir}'`);
+      }
+
+      const caughtErr = ['EACCES', 'EPERM', 'EISDIR'].indexOf(err.code) > -1;
+      if (!caughtErr || caughtErr && curDir === path.resolve(targetDir)) {
+        throw err; // Throw if it's just the last created dir.
+      }
+    }
+
+    return curDir;
+  }, initDir);
+}
