@@ -4,7 +4,7 @@ const {
   writeFileSync,
   chmodSync,
   constants,
-    unlinkSync
+  unlinkSync
 } = require("fs");
 const fs = require("fs");
 const path = require("path");
@@ -44,7 +44,7 @@ const npm = __dirname + "/node_modules/npm/bin/npm-cli";
     const npmArgs = [
       ...process.argv.slice(breakerIndex),
       "--no-update-notifier",
-      `--script-shell=${fauxBinsPath}/shell${isWin? ".bat" : ""}`
+      `--script-shell=${fauxBinsPath}/shell${isWin ? ".bat" : ""}`
     ];
     debug(npmArgs);
     const cmd = fork(npm, npmArgs, { stdio: "inherit", env: process.env });
@@ -58,7 +58,10 @@ const npm = __dirname + "/node_modules/npm/bin/npm-cli";
     debug("Detected is:node flag, calling node");
     const breakerIndex = process.argv.indexOf("is:node") + 1;
     const nodeArgs = [...process.argv.slice(breakerIndex)];
-    const cmd = fork(nodeArgs[0], nodeArgs.slice(1), { stdio: "inherit", env: process.env  });
+    const cmd = fork(nodeArgs[0], nodeArgs.slice(1), {
+      stdio: "inherit",
+      env: process.env
+    });
     cmd.on("close", () => {
       debug(`faux-node done.`);
     });
@@ -136,9 +139,9 @@ const npm = __dirname + "/node_modules/npm/bin/npm-cli";
 function createFauxBinaries(isWin, isWriter, fauxBinsPath) {
   const fauxBins = {
     /* Linux / OSX */
-    "shell": `#!/usr/bin/env bash
+    shell: `#!/usr/bin/env bash
 bash "\${\@/*${process.argv[0].split("/").slice(-1)[0]}/node}"`,
-    "node": `#!/usr/bin/env bash
+    node: `#!/usr/bin/env bash
 if [[ "$@" == *"gyp"* ]]; then
   ${process.argv[0]} "$@"
 else
@@ -149,9 +152,9 @@ else
 
   ${process.argv[0]} $ARGS
 fi`,
-    "npm": `${
+    npm: `${
       process.argv[0]
-      } "/snapshot/npnoo/node_modules/npm/bin/npm-cli" --no-update-notifier --script-shell "${fauxBinsPath}/shell" "$@"`,
+    } "/snapshot/npnoo/node_modules/npm/bin/npm-cli" --no-update-notifier --script-shell "${fauxBinsPath}/shell" "$@"`,
     /* Windows */
     "node.bat": `@echo off
 set str=%*
@@ -172,7 +175,7 @@ cmd /d /c %cmd%`,
     "npm.bat": `@echo off
 ${
       process.argv[0]
-      } "/snapshot/npnoo/node_modules/npm/bin/npm-cli" --no-update-notifier --scripts-prepend-node-path="auto" --script-shell "${fauxBinsPath}/shell.bat" %*`,
+    } "/snapshot/npnoo/node_modules/npm/bin/npm-cli" --no-update-notifier --scripts-prepend-node-path="auto" --script-shell "${fauxBinsPath}/shell.bat" %*`
   };
 
   try {
@@ -201,25 +204,27 @@ ${
 //https://stackoverflow.com/questions/31645738/how-to-create-full-path-with-nodes-fs-mkdirsync
 function mkDirByPathSync(targetDir, { isRelativeToScript = false } = {}) {
   const sep = path.sep;
-  const initDir = path.isAbsolute(targetDir) ? sep : '';
-  const baseDir = isRelativeToScript ? __dirname : '.';
+  const initDir = path.isAbsolute(targetDir) ? sep : "";
+  const baseDir = isRelativeToScript ? __dirname : ".";
 
   return targetDir.split(sep).reduce((parentDir, childDir) => {
     const curDir = path.resolve(baseDir, parentDir, childDir);
     try {
       fs.mkdirSync(curDir);
     } catch (err) {
-      if (err.code === 'EEXIST') { // curDir already exists!
+      if (err.code === "EEXIST") {
+        // curDir already exists!
         return curDir;
       }
 
       // To avoid `EISDIR` error on Mac and `EACCES`-->`ENOENT` and `EPERM` on Windows.
-      if (err.code === 'ENOENT') { // Throw the original parentDir error on curDir `ENOENT` failure.
+      if (err.code === "ENOENT") {
+        // Throw the original parentDir error on curDir `ENOENT` failure.
         throw new Error(`EACCES: permission denied, mkdir '${parentDir}'`);
       }
 
-      const caughtErr = ['EACCES', 'EPERM', 'EISDIR'].indexOf(err.code) > -1;
-      if (!caughtErr || caughtErr && curDir === path.resolve(targetDir)) {
+      const caughtErr = ["EACCES", "EPERM", "EISDIR"].indexOf(err.code) > -1;
+      if (!caughtErr || (caughtErr && curDir === path.resolve(targetDir))) {
         throw err; // Throw if it's just the last created dir.
       }
     }
