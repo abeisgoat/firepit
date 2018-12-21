@@ -211,19 +211,34 @@ echo %~s1`,
   }
 }
 
-async function getSafeCrossPlatformPath(isWin, path, binPath) {
-  if (!binPath) binPath = fauxBinsPath;
+async function getSafeCrossPlatformPath(isWin, path) {
   if (!isWin) return path;
 
+  let command = `for %I in ("${path}") do echo %~sI`;
   return new Promise((resolve, reject) => {
-    require("child_process").execFile(
-      `${binPath}\\dosify_path.bat`,
-      [path],
-      (err, stdout, stderr) => {
-        if (err || stderr) reject(err || stderr);
-        resolve(stdout.trim());
+    const cmd = require("child_process").spawn(
+      `cmd`,
+      ["/c", command],
+      {
+        shell: true
+    });
+
+    let result = "";
+    cmd.on("error", (error) => {throw error});
+    cmd.stdout.on("data", (stdout) => {
+      result += stdout.toString();
+    });
+
+    cmd.on("close", (code) => {
+      if (code == 0) {
+        const lines = result.split("\r\n").filter((line) => line);
+        const path = lines.slice(-1)[0];
+        resolve(path.trim());
+      } else {
+        throw `Attempt to dosify path failed with code ${code}`;
       }
-    );
+    });
+
   });
 }
 
@@ -270,7 +285,6 @@ function Script_NodeJS() {
     env: process.env,
     cwd: process.cwd(),
     stdio: "inherit",
-    shell: true
   }).on("exit", (code) => {
     process.exit(code);
   })
@@ -296,26 +310,37 @@ async function Script_ShellJS() {
     args.splice(index, 1);
   }
 
+  args[0] = args[0].replace(process.execPath, "node");
   let [cmdRuntime, cmdScript, ...otherArgs] = args[0].split(" ");
 
   if (cmdRuntime === process.execPath) {
     cmdRuntime = "node";
+  }
 
+  let cmd;
+  if (cmdRuntime === "node") {
     if ([".", "/"].indexOf(cmdScript[0]) === -1) {
       cmdScript = await getSafeCrossPlatformPath(
         isWin,
-        path.join(process.cwd(), cmdScript),
-        __dirname
+        path.join(process.cwd(), cmdScript)
       );
     }
+
+    cmd = child_process.fork(cmdScript, otherArgs, {
+      env: process.env,
+      cwd: process.cwd(),
+      stdio: "inherit"
+    })
+  } else {
+    cmd = child_process.spawn(cmdRuntime, [cmdScript, ...otherArgs], {
+      env: process.env,
+      cwd: process.cwd(),
+      stdio: "inherit",
+      shell: true
+    });
   }
 
-  child_process.spawn(cmdRuntime, [cmdScript, ...otherArgs], {
-    env: process.env,
-    cwd: process.cwd(),
-    stdio: "inherit",
-    shell: true
-  }).on("exit", (code) => {
+  cmd.on("exit", (code) => {
     process.exit(code);
   });
 }
