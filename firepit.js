@@ -9,35 +9,53 @@ const {
 const fs = require("fs");
 const path = require("path");
 const { getInstalledPath } = require("get-installed-path");
-const { fork } = require("child_process");
+const { fork, execFile } = require("child_process");
 const homePath = require("user-home");
-const debug = require("debug")("trashbin");
 
 const npm = __dirname + "/node_modules/npm/bin/npm-cli";
+const isWin = process.platform === "win32";
+const isWriter = process.argv.indexOf("--pit:no-write") === -1;
+const isDebug = process.argv.indexOf("--pit:debug") !== -1;
+let fauxBinsPath = join(homePath, ".cache", "firebase", "bin");
+const unsafeNodePath = process.argv[0];
+let trashbin;
+
+if (isDebug) {
+  process.env.DEBUG = "trashbin";
+  process.argv.splice(process.argv.indexOf("--pit:debug"), 1);
+}
+
+const debug = require("debug")("trashbin");
+debug("Welcome to trashbin!");
 
 (async () => {
-  debug("Welcome to trashbin!");
-
-  const isWin = process.platform === "win32";
-  const isWriter = process.argv.indexOf("pit:no-write") === -1;
-  const fauxBinsPath = join(homePath, ".cache", "firebase", "bin");
-
   if (!isWriter) {
-    process.argv.splice(process.argv.indexOf("pit:no-write"), 1);
+    process.argv.splice(process.argv.indexOf("--pit:no-write"), 1);
   }
 
-  createFauxBinaries(isWin, isWriter, fauxBinsPath);
+  createFauxBinaries();
+
+  if (isWin) {
+    const safeNodePath = await getSafeCrossPlatformPath(isWin, process.argv[0]);
+    fauxBinsPath = await getSafeCrossPlatformPath(isWin, fauxBinsPath);
+    process.argv[0] = safeNodePath;
+    process.env.NODE = safeNodePath;
+    process.env._ = safeNodePath;
+    debug(safeNodePath);
+    debug(process.argv);
+    createFauxBinaries();
+  }
 
   if (isWin) {
     process.env.PATH = `${process.env.PATH};${fauxBinsPath}`;
   } else {
     process.env.PATH = `${process.env.PATH}:${fauxBinsPath}`;
   }
-  process.env._ = join(fauxBinsPath, "node");
-  process.env.NODE = process.env._;
+  // process.env._ = join(fauxBinsPath, "node");
+  // process.env.NODE = process.env._;
 
-  debug(process.argv);
-  debug(process.env);
+  // debug(process.argv);
+  // debug(process.env);
   if (process.argv.indexOf("is:npm") !== -1) {
     debug("Detected is:npm flag, calling NPM");
     const breakerIndex = process.argv.indexOf("is:npm") + 1;
@@ -124,6 +142,7 @@ const npm = __dirname + "/node_modules/npm/bin/npm-cli";
         "--no-update-notifier",
         "install",
         "firebase-tools",
+        `--script-shell=${fauxBinsPath}/shell${isWin ? ".bat" : ""}`,
         "--prefix",
         installPath
       ],
@@ -134,9 +153,11 @@ const npm = __dirname + "/node_modules/npm/bin/npm-cli";
       debug(`npm is done.`);
     });
   }
-})();
+})().catch(err => {
+  throw err;
+});
 
-function createFauxBinaries(isWin, isWriter, fauxBinsPath) {
+function createFauxBinaries() {
   const fauxBins = {
     /* Linux / OSX */
     shell: `#!/usr/bin/env bash
@@ -152,30 +173,19 @@ else
 
   ${process.argv[0]} $ARGS
 fi`,
-    npm: `${
-      process.argv[0]
-    } "/snapshot/npnoo/node_modules/npm/bin/npm-cli" --no-update-notifier --script-shell "${fauxBinsPath}/shell" "$@"`,
+    npm: `"${unsafeNodePath}" "${npm}" --no-update-notifier --script-shell "${fauxBinsPath}\shell" "$@"`,
     /* Windows */
     "node.bat": `@echo off
-set str=%*
-call set cmd=%%str:%CD%=%%
-echo %str%
-echo %cmd%
-set cmd=%cmd:"=%
-${process.argv[0]} %CD%\\%CMD%`,
+"${unsafeNodePath}"  ${fauxBinsPath}\\node.js %*`,
     "shell.bat": `@echo off
-setlocal ENABLEDELAYEDEXPANSION
-set PATH=%PATH%;${fauxBinsPath}
-set blank=
-set str=%*
-set str=%str:-c=!blank!%
-set node_runtime=node
-set cmd=%str:${process.argv[0]} =!node_runtime! %
-cmd /d /c %cmd%`,
+"${unsafeNodePath}"  ${fauxBinsPath}\\shell.js %*`,
     "npm.bat": `@echo off
-${
-      process.argv[0]
-    } "/snapshot/npnoo/node_modules/npm/bin/npm-cli" --no-update-notifier --scripts-prepend-node-path="auto" --script-shell "${fauxBinsPath}/shell.bat" %*`
+node "${npm}" --no-update-notifier --scripts-prepend-node-path="auto" --script-shell "${fauxBinsPath}\\shell.bat" %*`,
+    // https://stackoverflow.com/questions/4051088/get-dos-path-instead-of-windows-path
+    "dosify_path.bat": `@echo off
+echo %~s1`,
+    "shell.js": `${getSafeCrossPlatformPath.toString()}\n(${Script_ShellJS.toString()})()`,
+    "node.js": `(${Script_NodeJS.toString()})()`
   };
 
   try {
@@ -199,6 +209,22 @@ ${
       }
     });
   }
+}
+
+async function getSafeCrossPlatformPath(isWin, path, binPath) {
+  if (!binPath) binPath = fauxBinsPath;
+  if (!isWin) return path;
+
+  return new Promise((resolve, reject) => {
+    require("child_process").execFile(
+      `${binPath}\\dosify_path.bat`,
+      [path],
+      (err, stdout, stderr) => {
+        if (err || stderr) reject(err || stderr);
+        resolve(stdout.trim());
+      }
+    );
+  });
 }
 
 //https://stackoverflow.com/questions/31645738/how-to-create-full-path-with-nodes-fs-mkdirsync
@@ -231,4 +257,65 @@ function mkDirByPathSync(targetDir, { isRelativeToScript = false } = {}) {
 
     return curDir;
   }, initDir);
+}
+
+/*
+These functions are not invoked, but are placed into standalone files which
+are invoked during runtime.
+ */
+
+function Script_NodeJS() {
+  const [script, ...otherArgs] = process.argv.slice(2);
+  require("child_process").fork(script, otherArgs, {
+    env: process.env,
+    cwd: process.cwd(),
+    stdio: "inherit",
+    shell: true
+  }).on("exit", (code) => {
+    process.exit(code);
+  })
+}
+
+async function Script_ShellJS() {
+  const path = require("path");
+  const child_process = require("child_process");
+  const isWin = process.platform === "win32";
+
+  const args = process.argv.slice(2);
+  const PATH = process.env.PATH;
+  const pathSeperator = isWin ? ";" : ":";
+
+  process.env.path = [
+    __dirname,
+    path.join(process.cwd(), "node_modules/.bin"),
+    ...PATH.split(pathSeperator).filter(folder => folder)
+  ].join(pathSeperator);
+
+  let index;
+  if ((index = args.indexOf("-c")) !== -1) {
+    args.splice(index, 1);
+  }
+
+  let [cmdRuntime, cmdScript, ...otherArgs] = args[0].split(" ");
+
+  if (cmdRuntime === process.execPath) {
+    cmdRuntime = "node";
+
+    if ([".", "/"].indexOf(cmdScript[0]) === -1) {
+      cmdScript = await getSafeCrossPlatformPath(
+        isWin,
+        path.join(process.cwd(), cmdScript),
+        __dirname
+      );
+    }
+  }
+
+  child_process.spawn(cmdRuntime, [cmdScript, ...otherArgs], {
+    env: process.env,
+    cwd: process.cwd(),
+    stdio: "inherit",
+    shell: true
+  }).on("exit", (code) => {
+    process.exit(code);
+  });
 }
