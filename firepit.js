@@ -12,7 +12,6 @@ const { getInstalledPath } = require("get-installed-path");
 const { fork, spawn } = require("child_process");
 const homePath = require("user-home");
 
-
 const isWin = process.platform === "win32";
 const isWriter = process.argv.indexOf("--pit:no-write") === -1;
 const IsLogDebug = process.argv.indexOf("--pit:log-debug") !== -1;
@@ -23,7 +22,6 @@ let runtimeBinsPath = join(homePath, ".cache", "firebase", "bin");
 
 const moduleBinPath = "./lib/bin/firebase.js";
 const npmBinPath = __dirname + "/node_modules/npm/bin/npm-cli";
-
 
 let safeNodePath;
 const unsafeNodePath = process.argv[0];
@@ -39,9 +37,9 @@ if (!isWriter) {
 const log = [];
 const debug = (...msg) => {
   if (IsLogDebug) {
-    msg.forEach((m) => console.log(m));
+    msg.forEach(m => console.log(m));
   } else {
-    msg.forEach((m) => log.push(m));
+    msg.forEach(m => log.push(m));
   }
 };
 debug("Welcome to firepit!");
@@ -80,7 +78,9 @@ debug("Welcome to firepit!");
   }
 })().catch(err => {
   debug(err.toString());
-  console.log(`This tool has encountered an error. Please file a bug on Github and include firepit-log.txt`);
+  console.log(
+    `This tool has encountered an error. Please file a bug on Github and include firepit-log.txt`
+  );
   writeFileSync("firepit-log.txt", log.join("\n"));
 });
 
@@ -201,7 +201,6 @@ function ImitateFirebaseTools(binPath) {
   });
 }
 
-
 function createRuntimeBinaries() {
   const runtimeBins = {
     /* Linux / OSX */
@@ -277,7 +276,6 @@ function mkDirByPathSync(targetDir, { isRelativeToScript = false } = {}) {
   }, initDir);
 }
 
-
 /*
 -------------------------------------
 Shared Firepit / Runtime Functions
@@ -323,7 +321,6 @@ function appendToPath(isWin, pathsToAppend) {
     ...pathsToAppend,
     ...PATH.split(pathSeperator).filter(folder => folder)
   ].join(pathSeperator);
-
 }
 
 /*
