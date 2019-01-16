@@ -1,54 +1,44 @@
-const { join } = require("path");
-const {
-  lstatSync,
-  writeFileSync,
-  chmodSync,
-  constants,
-  unlinkSync
-} = require("fs");
 const fs = require("fs");
 const path = require("path");
-const { getInstalledPath } = require("get-installed-path");
 const { fork, spawn } = require("child_process");
 const homePath = require("user-home");
+const shell = require("shelljs");
+shell.config.silent = true;
+const runtime = require("./runtime");
 
-const isWin = process.platform === "win32";
-const isWriter = process.argv.indexOf("--pit:no-write") === -1;
-const IsLogDebug = process.argv.indexOf("--pit:log-debug") !== -1;
-const isFileDebug = process.argv.indexOf("--pit:file-debug") !== -1;
+const installPath = path.join(homePath, ".cache", "firebase", "cli");
+let runtimeBinsPath = path.join(homePath, ".cache", "firebase", "bin");
 
-const installPath = join(homePath, ".cache", "firebase", "cli");
-let runtimeBinsPath = join(homePath, ".cache", "firebase", "bin");
-
-const moduleBinPath = "./lib/bin/firebase.js";
-const npmBinPath = __dirname + "/node_modules/npm/bin/npm-cli";
+// const moduleBinPath = "./lib/bin/firebase.js";
+// const npmBinPath = __dirname + "/node_modules/npm/bin/npm-cli";
 
 let safeNodePath;
 const unsafeNodePath = process.argv[0];
 
-if (IsLogDebug) {
-  process.argv.splice(process.argv.indexOf("--pit:debug"), 1);
+const isFileDebug = process.argv.indexOf("--pit:file-debug") !== -1;
+if (isFileDebug) {
+  process.argv.splice(process.argv.indexOf("--pit:file-debug"), 1);
 }
 
+const isLogDebug = process.argv.indexOf("--pit:log-debug") !== -1;
+if (isLogDebug) {
+  process.argv.splice(process.argv.indexOf("--pit:log-debug"), 1);
+}
+
+const isWriter = process.argv.indexOf("--pit:disable-write") === -1;
 if (!isWriter) {
-  process.argv.splice(process.argv.indexOf("--pit:no-write"), 1);
+  process.argv.splice(process.argv.indexOf("--pit:disable-write"), 1);
 }
 
-const log = [];
-const debug = (...msg) => {
-  if (IsLogDebug) {
-    msg.forEach(m => console.log(m));
-  } else {
-    msg.forEach(m => log.push(m));
-  }
-};
+const isWindows = process.platform === "win32";
+
 debug("Welcome to firepit!");
 
 (async () => {
   const isTopLevel = process.env.IN_FIREPIT !== "true";
-  safeNodePath = await getSafeCrossPlatformPath(isWin, process.argv[0]);
+  safeNodePath = await getSafeCrossPlatformPath(isWindows, process.argv[0]);
 
-  if (isTopLevel && isWin) {
+  if (isTopLevel && isWindows) {
     const shellConfig = {
       stdio: "inherit",
       env: {
@@ -74,18 +64,39 @@ debug("Welcome to firepit!");
   }
 
   if (isFileDebug) {
-    writeFileSync("firepit-log.txt", log.join("\n"));
+    fs.writeFileSync("firepit-log.txt", debug.log.join("\n"));
   }
 })().catch(err => {
   debug(err.toString());
   console.log(
     `This tool has encountered an error. Please file a bug on Github and include firepit-log.txt`
   );
-  writeFileSync("firepit-log.txt", log.join("\n"));
+  fs.writeFileSync("firepit-log.txt", debug.log.join("\n"));
 });
 
+function FindTool(bin) {
+  /*
+    When locating firebase-tools, npm, node, etc they could all be hiding
+    inside the firepit exe or in the npm cache.
+   */
+
+  const potentialPaths = [
+    path.join(installPath, "lib/node_modules", bin),
+    path.join(__dirname, "node_modules", bin)
+  ];
+
+  return potentialPaths
+    .map(path => {
+      debug(`Checking for ${bin} install at ${path}`);
+      if (shell.ls(path + ".js").code === 0) {
+        debug(`Found ${bin} install.`);
+        return path;
+      }
+    })
+    .filter(p => p);
+}
 async function firepit() {
-  runtimeBinsPath = await getSafeCrossPlatformPath(isWin, runtimeBinsPath);
+  runtimeBinsPath = await getSafeCrossPlatformPath(isWindows, runtimeBinsPath);
   process.argv[0] = safeNodePath;
   process.env.NODE = safeNodePath;
   process.env._ = safeNodePath;
@@ -94,7 +105,7 @@ async function firepit() {
   debug(process.argv);
 
   createRuntimeBinaries();
-  appendToPath(isWin, [runtimeBinsPath]);
+  appendToPath(isWindows, [runtimeBinsPath]);
 
   if (process.argv.indexOf("is:npm") !== -1) {
     return ImitateNPM();
@@ -104,64 +115,24 @@ async function firepit() {
     return ImitateNode();
   }
 
-  const firebaseToolsBinPaths = [];
-
-  try {
-    const firepitFirebaseToolsBinPath = join(
-      installPath,
-      "node_modules/firebase-tools",
-      moduleBinPath
-    );
-
-    debug(`Checking for firepit CLI install at ${firepitFirebaseToolsBinPath}`);
-
-    if (lstatSync(firepitFirebaseToolsBinPath).isFile()) {
-      debug(`Found firepit install.`);
-      firebaseToolsBinPaths.push(firepitFirebaseToolsBinPath);
-    }
-  } catch (err) {
-    debug(err);
-    debug("Can't find firepit firebase-tools install");
-  }
-
-  try {
-    debug("Attempting to lookup global CLI install...");
-
-    const globalFirebaseToolsBinPath = join(
-      await getInstalledPath("firebase-tools"),
-      moduleBinPath
-    );
-    firebaseToolsBinPaths.push(globalFirebaseToolsBinPath);
-  } catch (err) {
-    debug(err);
-    debug("Can't find global firebase-tools install");
-  }
-
-  if (firebaseToolsBinPaths.length) {
-    const binPath = firebaseToolsBinPaths[0];
-    debug(`CLI install found at "${binPath}", starting fork...`);
-    ImitateFirebaseTools(binPath);
+  const firebaseBins = FindTool("firebase-tools/lib/bin/firebase");
+  if (firebaseBins.length) {
+    const firebaseBin = firebaseBins[0];
+    debug(`CLI install found at "${firebaseBin}", starting fork...`);
+    ImitateFirebaseTools(firebaseBin);
   } else {
     debug(`CLI not found! Invoking npm...`);
     debug(`Attempting to install to "${installPath}"`);
-
     console.log(`Please wait while the Firebase CLI downloads...`);
-    const cmd = fork(
-      npmBinPath,
-      [
-        "--no-update-notifier",
-        "install",
-        "firebase-tools",
-        `--script-shell=${runtimeBinsPath}/shell${isWin ? ".bat" : ""}`,
-        "--prefix",
-        installPath
-      ],
-      { stdio: "inherit", env: process.env }
-    );
-
-    cmd.on("close", () => {
-      debug(`npm is done.`);
-    });
+    process.argv = [
+      ...process.argv.slice(0, 2),
+      "is:npm",
+      "install",
+      "-g",
+      "npm",
+      "firebase-tools"
+    ];
+    ImitateNPM();
   }
 }
 
@@ -170,11 +141,15 @@ function ImitateNPM() {
   const breakerIndex = process.argv.indexOf("is:npm") + 1;
   const npmArgs = [
     ...process.argv.slice(breakerIndex),
-    "--no-update-notifier",
-    `--script-shell=${runtimeBinsPath}/shell${isWin ? ".bat" : ""}`
+    `--script-shell=${runtimeBinsPath}/shell${isWindows ? ".bat" : ""}`,
+    "--prefix",
+    installPath
   ];
   debug(npmArgs);
-  const cmd = fork(npmBinPath, npmArgs, { stdio: "inherit", env: process.env });
+  const cmd = fork(FindTool("npm/bin/npm-cli")[0], npmArgs, {
+    stdio: "inherit",
+    env: process.env
+  });
   cmd.on("close", () => {
     debug(`faux-npm done.`);
   });
@@ -206,7 +181,9 @@ function createRuntimeBinaries() {
     /* Linux / OSX */
     shell: `"${unsafeNodePath}"  ${runtimeBinsPath}/shell.js "$@"`,
     node: `"${unsafeNodePath}"  ${runtimeBinsPath}/node.js "$@"`,
-    npm: `"${unsafeNodePath}" "${npmBinPath}" --no-update-notifier --script-shell "${runtimeBinsPath}/shell" "$@"`,
+    npm: `"${unsafeNodePath}" "${
+      FindTool("npm/bin/npm-cli")[0]
+    }" --script-shell "${runtimeBinsPath}/shell" "$@"`,
 
     /* Windows */
     "node.bat": `@echo off
@@ -214,66 +191,33 @@ function createRuntimeBinaries() {
     "shell.bat": `@echo off
 "${unsafeNodePath}"  ${runtimeBinsPath}\\shell.js %*`,
     "npm.bat": `@echo off
-node "${npmBinPath}" --no-update-notifier --scripts-prepend-node-path="auto" --script-shell "${runtimeBinsPath}\\shell.bat" %*`,
+node "${
+      FindTool("npm/bin/npm-cli")[0]
+    }" --scripts-prepend-node-path="auto" --script-shell "${runtimeBinsPath}\\shell.bat" %*`,
 
     /* Runtime scripts */
-    "shell.js": `${appendToPath.toString()}\n${getSafeCrossPlatformPath.toString()}\n(${Script_ShellJS.toString()})()`,
-    "node.js": `(${Script_NodeJS.toString()})()`
+    "shell.js": `${appendToPath.toString()}\n${getSafeCrossPlatformPath.toString()}\n(${runtime.Script_ShellJS.toString()})()`,
+    "node.js": `(${runtime.Script_NodeJS.toString()})()`
   };
 
   try {
-    mkDirByPathSync(runtimeBinsPath);
+    shell.mkdir("-p", runtimeBinsPath);
   } catch (err) {
     debug(err);
   }
 
   if (isWriter) {
     Object.keys(runtimeBins).forEach(filename => {
-      const runtimeBinPath = join(runtimeBinsPath, filename);
+      const runtimeBinPath = path.join(runtimeBinsPath, filename);
       try {
-        unlinkSync(runtimeBinPath);
+        fs.unlinkSync(runtimeBinPath);
       } catch (err) {
         debug(err);
       }
-      writeFileSync(runtimeBinPath, runtimeBins[filename]);
-      if (!isWin) {
-        const rwx = constants.S_IRUSR | constants.S_IWUSR | constants.S_IXUSR;
-        chmodSync(runtimeBinPath, rwx);
-      }
+      fs.writeFileSync(runtimeBinPath, runtimeBins[filename]);
+      shell.chmod("+x", runtimeBinPath);
     });
   }
-}
-
-// https://stackoverflow.com/questions/31645738/how-to-create-full-path-with-nodes-fs-mkdirsync
-function mkDirByPathSync(targetDir, { isRelativeToScript = false } = {}) {
-  const sep = path.sep;
-  const initDir = path.isAbsolute(targetDir) ? sep : "";
-  const baseDir = isRelativeToScript ? __dirname : ".";
-
-  return targetDir.split(sep).reduce((parentDir, childDir) => {
-    const curDir = path.resolve(baseDir, parentDir, childDir);
-    try {
-      fs.mkdirSync(curDir);
-    } catch (err) {
-      if (err.code === "EEXIST") {
-        // curDir already exists!
-        return curDir;
-      }
-
-      // To avoid `EISDIR` error on Mac and `EACCES`-->`ENOENT` and `EPERM` on Windows.
-      if (err.code === "ENOENT") {
-        // Throw the original parentDir error on curDir `ENOENT` failure.
-        throw new Error(`EACCES: permission denied, mkdir '${parentDir}'`);
-      }
-
-      const caughtErr = ["EACCES", "EPERM", "EISDIR"].indexOf(err.code) > -1;
-      if (!caughtErr || (caughtErr && curDir === path.resolve(targetDir))) {
-        throw err; // Throw if it's just the last created dir.
-      }
-    }
-
-    return curDir;
-  }, initDir);
 }
 
 /*
@@ -288,7 +232,7 @@ async function getSafeCrossPlatformPath(isWin, path) {
   if (!isWin) return path;
 
   let command = `for %I in ("${path}") do echo %~sI`;
-  return new Promise((resolve, reject) => {
+  return new Promise(resolve => {
     const cmd = require("child_process").spawn(`cmd`, ["/c", command], {
       shell: true
     });
@@ -323,76 +267,12 @@ function appendToPath(isWin, pathsToAppend) {
   ].join(pathSeperator);
 }
 
-/*
--------------------------------------
-Runtime Scripts
+function debug(...msg) {
+  if (!debug.log) debug.log = [];
 
-These functions are not invoked in firepit,
-but are written to the filesystem (via Function.toString())
-and then invoked from platform-specific .bat or .sh scripts
--------------------------------------
- */
-
-function Script_NodeJS() {
-  const [script, ...otherArgs] = process.argv.slice(2);
-  require("child_process")
-    .fork(script, otherArgs, {
-      env: process.env,
-      cwd: process.cwd(),
-      stdio: "inherit"
-    })
-    .on("exit", code => {
-      process.exit(code);
-    });
-}
-
-async function Script_ShellJS() {
-  const path = require("path");
-  const child_process = require("child_process");
-  const isWin = process.platform === "win32";
-  const args = process.argv.slice(2);
-
-  appendToPath(isWin, [
-    __dirname,
-    path.join(process.cwd(), "node_modules/.bin")
-  ]);
-
-  let index;
-  if ((index = args.indexOf("-c")) !== -1) {
-    args.splice(index, 1);
-  }
-
-  args[0] = args[0].replace(process.execPath, "node");
-  let [cmdRuntime, cmdScript, ...otherArgs] = args[0].split(" ");
-
-  if (cmdRuntime === process.execPath) {
-    cmdRuntime = "node";
-  }
-
-  let cmd;
-  if (cmdRuntime === "node") {
-    if ([".", "/"].indexOf(cmdScript[0]) === -1) {
-      cmdScript = await getSafeCrossPlatformPath(
-        isWin,
-        path.join(process.cwd(), cmdScript)
-      );
-    }
-
-    cmd = child_process.fork(cmdScript, otherArgs, {
-      env: process.env,
-      cwd: process.cwd(),
-      stdio: "inherit"
-    });
+  if (isLogDebug) {
+    msg.forEach(m => console.log(m));
   } else {
-    cmd = child_process.spawn(cmdRuntime, [cmdScript, ...otherArgs], {
-      env: process.env,
-      cwd: process.cwd(),
-      stdio: "inherit",
-      shell: true
-    });
+    msg.forEach(m => debug.log.push(m));
   }
-
-  cmd.on("exit", code => {
-    process.exit(code);
-  });
 }
