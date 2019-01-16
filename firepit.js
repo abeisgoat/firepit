@@ -82,6 +82,7 @@ function FindTool(bin) {
 
   const potentialPaths = [
     path.join(installPath, "lib/node_modules", bin),
+    path.join(installPath, "node_modules", bin),
     path.join(__dirname, "node_modules", bin)
   ];
 
@@ -139,11 +140,12 @@ async function firepit() {
 function ImitateNPM() {
   debug("Detected is:npm flag, calling NPM");
   const breakerIndex = process.argv.indexOf("is:npm") + 1;
+  //TODO: use npmrc to specifc prefix so it's ignored when not included by -g
   const npmArgs = [
-    ...process.argv.slice(breakerIndex),
     `--script-shell=${runtimeBinsPath}/shell${isWindows ? ".bat" : ""}`,
     "--prefix",
-    installPath
+    installPath,
+    ...process.argv.slice(breakerIndex),
   ];
   debug(npmArgs);
   const cmd = fork(FindTool("npm/bin/npm-cli")[0], npmArgs, {
