@@ -1,3 +1,9 @@
-# firepit - Standalone firebase-tools bootloader
+# Firepit - Instant Firebase Command-line
 
-This is not an official Google product.
+Firepit is a standalone, portable version of the Firebase CLI which has no depedencies (including Node.js). Download, click, and immediately get access to both `firebase` and `npm` commands.
+
+## Downloads
+* [Windows (v0.0.0-alpha)](https://storage.googleapis.com/rainbow-diagram/firepit-win.exe)
+
+## Credits
+*This is not an official Google product.*
