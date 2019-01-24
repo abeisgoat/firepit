@@ -31,7 +31,7 @@ if (!isWriter) {
   process.argv.splice(process.argv.indexOf("--pit:disable-write"), 1);
 }
 
-const isRuntimeCheck = process.argv.indexOf("--eval") !== -1;
+const isRuntimeCheck = process.argv.indexOf("--pit:runtime-check") !== -1;
 if (isRuntimeCheck) {
   console.log(`firepit invokved for runtime check, exiting subpit.`);
   return;
@@ -97,8 +97,9 @@ debug(`Welcome to firepit v${version}!`);
 });
 
 async function VerifyNodePath(nodePath) {
+  const runtimeCheckPath = await getSafeCrossPlatformPath(isWindows, path.join(__dirname, 'check.js'));
   return new Promise(resolve => {
-    const cmd = spawn(nodePath, ["--eval", `"console.log('✓')"`], {
+    const cmd = spawn(nodePath, [runtimeCheckPath, "--pit:runtime-check"], {
       shell: true
     });
 
