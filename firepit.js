@@ -33,7 +33,7 @@ if (!isWriter) {
 
 const isRuntimeCheck = process.argv.indexOf("--pit:runtime-check") !== -1;
 if (isRuntimeCheck) {
-  console.log(`firepit invokved for runtime check, exiting subpit.`);
+  console.log(`firepit invoked for runtime check, exiting subpit.`);
   return;
 }
 
