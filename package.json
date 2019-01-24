@@ -1,11 +1,12 @@
 {
   "name": "firepit",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "description": "",
   "main": "index.js",
   "scripts": {
     "fmt": "prettier --write *.js",
-    "pkg": "pkg -c package.json firepit.js --out-path dist/ && chmod +x dist/firepit-*"
+    "pkg": "pkg -c package.json firepit.js --out-path dist/ && chmod +x dist/firepit-*",
+    "ship": "gsutil -m cp dist/* gs://fir-tools-builds/firepit/ && gsutil iam ch allUsers:objectViewer gs://fir-tools-builds"
   },
   "author": "",
   "license": "ISC",

@@ -47,13 +47,28 @@ debug("Welcome to firepit!");
       }
     };
 
+    const isRuntime = await VerifyNodePath(safeNodePath);
+    debug(`Node path ${safeNodePath} is runtime? ${isRuntime}`);
+
+    let firebase_command;
+    if (isRuntime) {
+      const script_path = await getSafeCrossPlatformPath(
+        isWindows,
+        path.join(__dirname, "/firepit.js")
+      );
+      firebase_command = `${safeNodePath} ${script_path}`;
+    } else {
+      firebase_command = safeNodePath;
+    }
+
+    debug(firebase_command);
     spawn(
       "cmd",
       [
         "/k",
         [
-          `doskey firebase=${safeNodePath} $*`,
-          `doskey npm=${safeNodePath} is:npm $*`,
+          `doskey firebase=${firebase_command} $*`,
+          `doskey npm=${firebase_command} is:npm $*`,
           "echo Welcome to the Firebase Shell! You can type 'firebase' or 'npm' to run commands!"
         ].join(" | ")
       ],
@@ -73,6 +88,37 @@ debug("Welcome to firepit!");
   );
   fs.writeFileSync("firepit-log.txt", debug.log.join("\n"));
 });
+
+async function VerifyNodePath(nodePath) {
+  return new Promise(resolve => {
+    const cmd = spawn(nodePath, ["-e", "console.log('✓')"], {
+      shell: true
+    });
+
+    let result = "";
+    cmd.on("error", error => {
+      throw error;
+    });
+    cmd.stdout.on("data", stdout => {
+      result += stdout.toString();
+    });
+
+    cmd.on("close", code => {
+      if (code === 0) {
+        const lines = result.split("\r\n").filter(line => line);
+        const path = lines.slice(-1)[0];
+
+        if (path.trim() === "✓") {
+          resolve(true);
+        } else {
+          resolve(false);
+        }
+      } else {
+        resolve(false);
+      }
+    });
+  });
+}
 
 function FindTool(bin) {
   /*
@@ -145,7 +191,7 @@ function ImitateNPM() {
     `--script-shell=${runtimeBinsPath}/shell${isWindows ? ".bat" : ""}`,
     "--prefix",
     installPath,
-    ...process.argv.slice(breakerIndex),
+    ...process.argv.slice(breakerIndex)
   ];
   debug(npmArgs);
   const cmd = fork(FindTool("npm/bin/npm-cli")[0], npmArgs, {
