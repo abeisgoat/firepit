@@ -91,7 +91,7 @@ debug("Welcome to firepit!");
 
 async function VerifyNodePath(nodePath) {
   return new Promise(resolve => {
-    const cmd = spawn(nodePath, ["-e", "console.log('✓')"], {
+    const cmd = spawn(nodePath, ["-e", `"console.log('✓')"`], {
       shell: true
     });
 
@@ -99,6 +99,7 @@ async function VerifyNodePath(nodePath) {
     cmd.on("error", error => {
       throw error;
     });
+
     cmd.stdout.on("data", stdout => {
       result += stdout.toString();
     });
@@ -107,8 +108,11 @@ async function VerifyNodePath(nodePath) {
       if (code === 0) {
         const lines = result.split("\r\n").filter(line => line);
         const path = lines.slice(-1)[0];
+        const value = path.trim();
 
-        if (path.trim() === "✓") {
+        debug(`[VerifyNodePath] Expected "✓" from runtime got "${value}"`);
+
+        if (value === "✓") {
           resolve(true);
         } else {
           resolve(false);
