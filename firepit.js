@@ -5,6 +5,7 @@ const homePath = require("user-home");
 const shell = require("shelljs");
 shell.config.silent = true;
 const runtime = require("./runtime");
+const version = require("./package.json").version;
 
 const installPath = path.join(homePath, ".cache", "firebase", "cli");
 let runtimeBinsPath = path.join(homePath, ".cache", "firebase", "bin");
@@ -30,9 +31,15 @@ if (!isWriter) {
   process.argv.splice(process.argv.indexOf("--pit:disable-write"), 1);
 }
 
+const isRuntimeCheck = process.argv.indexOf("--eval") !== -1;
+if (isRuntimeCheck) {
+  console.log(`firepit invokved for runtime check, exiting subpit.`);
+  return;
+}
+
 const isWindows = process.platform === "win32";
 
-debug("Welcome to firepit!");
+debug(`Welcome to firepit v${version}!`);
 
 (async () => {
   const isTopLevel = process.env.IN_FIREPIT !== "true";
@@ -91,7 +98,7 @@ debug("Welcome to firepit!");
 
 async function VerifyNodePath(nodePath) {
   return new Promise(resolve => {
-    const cmd = spawn(nodePath, ["-e", `"console.log('✓')"`], {
+    const cmd = spawn(nodePath, ["--eval", `"console.log('✓')"`], {
       shell: true
     });
 
@@ -100,19 +107,19 @@ async function VerifyNodePath(nodePath) {
       throw error;
     });
 
+    cmd.stderr.on("data", stderr => {
+      debug(`STDERR: ${stderr.toString()}`);
+    });
+
     cmd.stdout.on("data", stdout => {
+      debug(`STDOUT: ${stdout.toString()}`);
       result += stdout.toString();
     });
 
     cmd.on("close", code => {
+      debug(`[VerifyNodePath] Expected "✓" from runtime got code ${code} with output "${result}"`);
       if (code === 0) {
-        const lines = result.split("\r\n").filter(line => line);
-        const path = lines.slice(-1)[0];
-        const value = path.trim();
-
-        debug(`[VerifyNodePath] Expected "✓" from runtime got "${value}"`);
-
-        if (value === "✓") {
+        if (result.indexOf("✓") >= 0) {
           resolve(true);
         } else {
           resolve(false);
