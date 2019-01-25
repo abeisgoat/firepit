@@ -3,15 +3,11 @@ const path = require("path");
 const { fork, spawn } = require("child_process");
 const homePath = require("user-home");
 const shell = require("shelljs");
-shell.config.silent = true;
 const runtime = require("./runtime");
 const version = require("./package.json").version;
 
 const installPath = path.join(homePath, ".cache", "firebase", "cli");
 let runtimeBinsPath = path.join(homePath, ".cache", "firebase", "bin");
-
-// const moduleBinPath = "./lib/bin/firebase.js";
-// const npmBinPath = __dirname + "/node_modules/npm/bin/npm-cli";
 
 let safeNodePath;
 const unsafeNodePath = process.argv[0];
@@ -38,6 +34,7 @@ if (isRuntimeCheck) {
 }
 
 const isWindows = process.platform === "win32";
+shell.config.silent = true;
 
 debug(`Welcome to firepit v${version}!`);
 
@@ -81,6 +78,10 @@ debug(`Welcome to firepit v${version}!`);
       ],
       shellConfig
     );
+
+    process.on("SIGINT", () => {
+      debug("Received SIGINT. Refusing to close top-level shell.");
+    });
   } else {
     await firepit();
   }
