@@ -198,11 +198,9 @@ async function firepit() {
 function ImitateNPM() {
   debug("Detected is:npm flag, calling NPM");
   const breakerIndex = process.argv.indexOf("is:npm") + 1;
-  //TODO: use npmrc to specifc prefix so it's ignored when not included by -g
   const npmArgs = [
     `--script-shell=${runtimeBinsPath}/shell${isWindows ? ".bat" : ""}`,
-    "--prefix",
-    installPath,
+    `--globalconfig=${path.join(runtimeBinsPath, "npmrc")}`,
     ...process.argv.slice(breakerIndex)
   ];
   debug(npmArgs);
@@ -257,7 +255,10 @@ node "${
 
     /* Runtime scripts */
     "shell.js": `${appendToPath.toString()}\n${getSafeCrossPlatformPath.toString()}\n(${runtime.Script_ShellJS.toString()})()`,
-    "node.js": `(${runtime.Script_NodeJS.toString()})()`
+    "node.js": `(${runtime.Script_NodeJS.toString()})()`,
+
+    /* Config files */
+    "npmrc": `prefix = "${installPath}"`
   };
 
   try {
