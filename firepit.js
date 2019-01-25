@@ -39,14 +39,14 @@ shell.config.silent = true;
 debug(`Welcome to firepit v${version}!`);
 
 (async () => {
-  const isTopLevel = process.env.IN_FIREPIT !== "true";
+  const isTopLevel = !!process.env.FIREPIT_VERSION;
   safeNodePath = await getSafeCrossPlatformPath(isWindows, process.argv[0]);
 
   if (isTopLevel && isWindows) {
     const shellConfig = {
       stdio: "inherit",
       env: {
-        IN_FIREPIT: "true",
+        FIREPIT_VERSION: version,
         ...process.env
       }
     };
@@ -234,7 +234,10 @@ function ImitateNode() {
 
 function ImitateFirebaseTools(binPath) {
   debug("Detected no special flags, calling firebase-tools");
-  const cmd = fork(binPath, process.argv.slice(2), { stdio: "inherit" });
+  const cmd = fork(binPath, process.argv.slice(2), {
+    stdio: "inherit",
+    env: { ...process.env, FIREPIT_VERSION: version }
+  });
   cmd.on("close", () => {
     debug(`firebase-tools is done.`);
   });
