@@ -97,7 +97,10 @@ debug(`Welcome to firepit v${version}!`);
 });
 
 async function VerifyNodePath(nodePath) {
-  const runtimeCheckPath = await getSafeCrossPlatformPath(isWindows, path.join(__dirname, 'check.js'));
+  const runtimeCheckPath = await getSafeCrossPlatformPath(
+    isWindows,
+    path.join(__dirname, "check.js")
+  );
   return new Promise(resolve => {
     const cmd = spawn(nodePath, [runtimeCheckPath, "--pit:runtime-check"], {
       shell: true
@@ -118,7 +121,9 @@ async function VerifyNodePath(nodePath) {
     });
 
     cmd.on("close", code => {
-      debug(`[VerifyNodePath] Expected "✓" from runtime got code ${code} with output "${result}"`);
+      debug(
+        `[VerifyNodePath] Expected "✓" from runtime got code ${code} with output "${result}"`
+      );
       if (code === 0) {
         if (result.indexOf("✓") >= 0) {
           resolve(true);
@@ -258,7 +263,7 @@ node "${
     "node.js": `(${runtime.Script_NodeJS.toString()})()`,
 
     /* Config files */
-    "npmrc": `prefix = "${installPath}"`
+    npmrc: `prefix = "${installPath}"`
   };
 
   try {
