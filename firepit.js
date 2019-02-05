@@ -53,7 +53,7 @@ shell.config.silent = true;
 debug(`Welcome to firepit v${version}!`);
 
 (async () => {
-  const isTopLevel = !!process.env.FIREPIT_VERSION;
+  const isTopLevel = !process.env.FIREPIT_VERSION;
   safeNodePath = await getSafeCrossPlatformPath(isWindows, process.argv[0]);
 
   if (isTopLevel && isWindows) {
