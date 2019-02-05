@@ -281,7 +281,7 @@ node "${
     "node.js": `(${runtime.Script_NodeJS.toString()})()`,
 
     /* Config files */
-    npmrc: `prefix = "${installPath}"`
+    npmrc: `prefix = ${installPath}`
   };
 
   try {
