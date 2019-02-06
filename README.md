@@ -1,4 +1,4 @@
-# Firepit - Instant Firebase Command-line
+# Firepit - Instant Firebase CLI for Window
 
 Firepit is a standalone, portable version of the Firebase CLI which has no depedencies (including Node.js). Download, click, and immediately get access to both `firebase` and `npm` commands.
 
