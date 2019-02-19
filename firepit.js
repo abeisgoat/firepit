@@ -16,9 +16,21 @@ const fs = require("fs");
 const path = require("path");
 const { fork, spawn } = require("child_process");
 const homePath = require("user-home");
+const chalk = require("chalk");
 const shell = require("shelljs");
+shell.config.silent = true;
+
 const runtime = require("./runtime");
 const version = require("./package.json").version;
+
+function SetWindowTitle(title) {
+  if (process.platform === 'win32') {
+    process.title = title;
+  } else {
+    process.stdout.write('\x1b]2;' + title + '\x1b\x5c');
+
+  }
+}
 
 const installPath = path.join(homePath, ".cache", "firebase", "cli");
 let runtimeBinsPath = path.join(homePath, ".cache", "firebase", "bin");
@@ -47,14 +59,40 @@ if (isRuntimeCheck) {
   return;
 }
 
+const isSetupCheck = process.argv.indexOf("--pit:setup-check") !== -1;
+if (isSetupCheck) {
+  process.argv.splice(process.argv.indexOf("--pit:setup-check"), 1);
+}
+
+const isForceSetup = process.argv.indexOf("--pit:force-setup") !== -1;
+if (isForceSetup) {
+  process.argv.splice(process.argv.indexOf("--pit:force-setup"), 1);
+}
+
 const isWindows = process.platform === "win32";
-shell.config.silent = true;
 
 debug(`Welcome to firepit v${version}!`);
 
 (async () => {
   const isTopLevel = !process.env.FIREPIT_VERSION;
   safeNodePath = await getSafeCrossPlatformPath(isWindows, process.argv[0]);
+
+  if (isSetupCheck) {
+    const bins = FindTool("firebase-tools/lib/bin/firebase");
+
+    for (const bin of bins) {
+      bins[bin] = await getSafeCrossPlatformPath(bins[bin]);
+    }
+
+    console.log(JSON.stringify({bins}));
+    return;
+  }
+
+  if (isForceSetup) {
+    createRuntimeBinaries();
+    SetupFirebaseTools();
+    return;
+  }
 
   if (isTopLevel && isWindows) {
     const shellConfig = {
@@ -80,6 +118,11 @@ debug(`Welcome to firepit v${version}!`);
     }
 
     debug(firebase_command);
+
+    const welcome_path = await getSafeCrossPlatformPath(
+      isWindows,
+      path.join(__dirname, "/welcome.js")
+    );
     spawn(
       "cmd",
       [
@@ -87,8 +130,9 @@ debug(`Welcome to firepit v${version}!`);
         [
           `doskey firebase=${firebase_command} $*`,
           `doskey npm=${firebase_command} is:npm $*`,
-          "echo Welcome to the Firebase Shell! You can type 'firebase' or 'npm' to run commands!"
-        ].join(" | ")
+          `set prompt=${chalk.yellow("$G")}`,
+          `${firebase_command} is:node ${welcome_path} ${firebase_command}`
+        ].join(" & ")
       ],
       shellConfig
     );
@@ -97,6 +141,7 @@ debug(`Welcome to firepit v${version}!`);
       debug("Received SIGINT. Refusing to close top-level shell.");
     });
   } else {
+    SetWindowTitle("Firebase CLI");
     await firepit();
   }
 
@@ -201,17 +246,7 @@ async function firepit() {
     ImitateFirebaseTools(firebaseBin);
   } else {
     debug(`CLI not found! Invoking npm...`);
-    debug(`Attempting to install to "${installPath}"`);
-    console.log(`Please wait while the Firebase CLI downloads...`);
-    process.argv = [
-      ...process.argv.slice(0, 2),
-      "is:npm",
-      "install",
-      "-g",
-      "npm",
-      "firebase-tools"
-    ];
-    ImitateNPM();
+    SetupFirebaseTools();
   }
 }
 
@@ -244,6 +279,21 @@ function ImitateNode() {
   cmd.on("close", () => {
     debug(`faux-node done.`);
   });
+}
+
+function SetupFirebaseTools() {
+  debug(`Attempting to install to "${installPath}"`);
+  console.log(`Please wait while the Firebase CLI downloads...`);
+  process.argv = [
+    ...process.argv.slice(0, 2),
+    "is:npm",
+    "install",
+    "-g",
+    "--verbose",
+    "npm",
+    "firebase-tools"
+  ];
+  ImitateNPM();
 }
 
 function ImitateFirebaseTools(binPath) {
