@@ -32,7 +32,7 @@ function SetWindowTitle(title) {
   }
 }
 
-const installPath = path.join(homePath, ".cache", "firebase", "cli");
+const installPath = path.join(homePath, ".cache", "firebase", "cache");
 let runtimeBinsPath = path.join(homePath, ".cache", "firebase", "bin");
 
 let safeNodePath;
@@ -206,13 +206,14 @@ function FindTool(bin) {
   const potentialPaths = [
     path.join(installPath, "lib/node_modules", bin),
     path.join(installPath, "node_modules", bin),
+    path.join(installPath, bin),
     path.join(__dirname, "node_modules", bin)
   ];
 
   return potentialPaths
     .map(path => {
       debug(`Checking for ${bin} install at ${path}`);
-      if (shell.ls(path + ".js").code === 0) {
+      if (shell.ls(path + ".js").code === 0 || shell.ls(path).code === 0) {
         debug(`Found ${bin} install.`);
         return path;
       }
@@ -248,6 +249,24 @@ async function firepit() {
     debug(`CLI not found! Invoking npm...`);
     SetupFirebaseTools();
   }
+}
+
+function ImitateYarn() {
+  debug("Detected is:yarn flag, calling yarn");
+  const breakerIndex = process.argv.indexOf("is:yarn") + 1;
+  const npmArgs = [
+    `--script-shell=${runtimeBinsPath}/shell${isWindows ? ".bat" : ""}`,
+    ...process.argv.slice(breakerIndex)
+  ];
+  debug(npmArgs);
+  debug(FindTool("yarn/bin/yarn.js"));
+  const cmd = fork(FindTool("yarn/bin/yarn.js")[0], npmArgs, {
+    stdio: "inherit",
+    env: process.env
+  });
+  cmd.on("close", () => {
+    debug(`faux-npm done.`);
+  });
 }
 
 function ImitateNPM() {
@@ -286,14 +305,17 @@ function SetupFirebaseTools() {
   console.log(`Please wait while the Firebase CLI downloads...`);
   process.argv = [
     ...process.argv.slice(0, 2),
-    "is:npm",
-    "install",
-    "-g",
+    "is:yarn",
+    "--no-default-rc",
+    `--use-yarnrc=${path.join(runtimeBinsPath, "yarnrc")}`,
+    `--modules-folder=${installPath}`,
     "--verbose",
+    "--offline",
+    "add",
     "npm",
     "firebase-tools"
   ];
-  ImitateNPM();
+  ImitateYarn();
 }
 
 function ImitateFirebaseTools(binPath) {
@@ -331,7 +353,7 @@ node "${
     "node.js": `(${runtime.Script_NodeJS.toString()})()`,
 
     /* Config files */
-    npmrc: `prefix = ${installPath}`
+    yarnrc: ``
   };
 
   try {
