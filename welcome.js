@@ -15,10 +15,6 @@
 const spawn = require("child_process").spawn;
 const fork = require("child_process").fork;
 const readline = require("readline");
-// const rl = readline.createInterface({
-//   input: process.stdin,
-//   output: process.stdout
-// });
 
 const chalk = require("chalk");
 const banner = `     ######## #### ########  ######## ########     ###     ######  ########  ##

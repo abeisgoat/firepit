@@ -6,22 +6,22 @@
   "scripts": {
     "fmt": "prettier --write *.js",
     "pkg": "pkg -c package.json firepit.js --out-path dist/ && chmod +x dist/firepit-*",
-    "ship": "gsutil -m cp dist/* gs://fir-tools-builds/firepit/ && gsutil iam ch allUsers:objectViewer gs://fir-tools-builds"
+    "ship": "gsutil -m cp dist/* gs://fir-tools-builds/firepit/ && gsutil iam ch allUsers:objectViewer gs://fir-tools-builds",
+    "uninstall": "rm -rf ~/.cache/firebase"
   },
   "author": "",
   "license": "ISC",
   "dependencies": {
     "chalk": "^2.4.2",
     "shelljs": "^0.8.3",
-    "user-home": "^2.0.0",
-    "yarn": "^1.13.0"
+    "user-home": "^2.0.0"
   },
   "pkg": {
     "scripts": [
       "node_modules/npm/src/**/*.js"
     ],
     "assets": [
-      "mirror/**/*",
+      "tools/**/*",
       "node_modules/.bin/**/*",
       "node_modules/yarn/**/*",
       "node_modules/npm/bin/**/*",

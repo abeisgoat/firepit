@@ -32,7 +32,7 @@ function SetWindowTitle(title) {
   }
 }
 
-const installPath = path.join(homePath, ".cache", "firebase", "cache");
+const installPath = path.join(homePath, ".cache", "firebase", "tools");
 let runtimeBinsPath = path.join(homePath, ".cache", "firebase", "bin");
 
 let safeNodePath;
@@ -90,7 +90,7 @@ debug(`Welcome to firepit v${version}!`);
 
   if (isForceSetup) {
     createRuntimeBinaries();
-    SetupFirebaseTools();
+    await SetupFirebaseTools();:
     return;
   }
 
@@ -130,7 +130,7 @@ debug(`Welcome to firepit v${version}!`);
         [
           `doskey firebase=${firebase_command} $*`,
           `doskey npm=${firebase_command} is:npm $*`,
-          `set prompt=${chalk.yellow("$G")}`,
+          `set prompt=${chalk.yellow("$G$G")}`,
           `${firebase_command} is:node ${welcome_path} ${firebase_command}`
         ].join(" & ")
       ],
@@ -247,26 +247,8 @@ async function firepit() {
     ImitateFirebaseTools(firebaseBin);
   } else {
     debug(`CLI not found! Invoking npm...`);
-    SetupFirebaseTools();
+    await SetupFirebaseTools();
   }
-}
-
-function ImitateYarn() {
-  debug("Detected is:yarn flag, calling yarn");
-  const breakerIndex = process.argv.indexOf("is:yarn") + 1;
-  const npmArgs = [
-    `--script-shell=${runtimeBinsPath}/shell${isWindows ? ".bat" : ""}`,
-    ...process.argv.slice(breakerIndex)
-  ];
-  debug(npmArgs);
-  debug(FindTool("yarn/bin/yarn.js"));
-  const cmd = fork(FindTool("yarn/bin/yarn.js")[0], npmArgs, {
-    stdio: "inherit",
-    env: process.env
-  });
-  cmd.on("close", () => {
-    debug(`faux-npm done.`);
-  });
 }
 
 function ImitateNPM() {
@@ -274,7 +256,6 @@ function ImitateNPM() {
   const breakerIndex = process.argv.indexOf("is:npm") + 1;
   const npmArgs = [
     `--script-shell=${runtimeBinsPath}/shell${isWindows ? ".bat" : ""}`,
-    `--globalconfig=${path.join(runtimeBinsPath, "npmrc")}`,
     ...process.argv.slice(breakerIndex)
   ];
   debug(npmArgs);
@@ -300,22 +281,23 @@ function ImitateNode() {
   });
 }
 
-function SetupFirebaseTools() {
+async function SetupFirebaseTools() {
   debug(`Attempting to install to "${installPath}"`);
-  console.log(`Please wait while the Firebase CLI downloads...`);
-  process.argv = [
-    ...process.argv.slice(0, 2),
-    "is:yarn",
-    "--no-default-rc",
-    `--use-yarnrc=${path.join(runtimeBinsPath, "yarnrc")}`,
-    `--modules-folder=${installPath}`,
-    "--verbose",
-    "--offline",
-    "add",
-    "npm",
-    "firebase-tools"
-  ];
-  ImitateYarn();
+  console.log(`Please wait while we extract your CLI...`);
+
+  const commands = require("./tools/package.json").scripts.unfreeze.split("&&");
+
+  for (let command of commands) {
+    const chunks = command.split(" ");
+
+    await new Promise((resolve, reject) => {
+      const cmd = spawn(chunks[0], chunks.slice(1), {cwd: installPath});
+      cmd.on("close", (code) => {
+        if (code === 0) resolve();
+        else reject();
+      });
+    });
+  }
 }
 
 function ImitateFirebaseTools(binPath) {
@@ -351,9 +333,6 @@ node "${
     /* Runtime scripts */
     "shell.js": `${appendToPath.toString()}\n${getSafeCrossPlatformPath.toString()}\n(${runtime.Script_ShellJS.toString()})()`,
     "node.js": `(${runtime.Script_NodeJS.toString()})()`,
-
-    /* Config files */
-    yarnrc: ``
   };
 
   try {
@@ -373,6 +352,12 @@ node "${
       fs.writeFileSync(runtimeBinPath, runtimeBins[filename]);
       shell.chmod("+x", runtimeBinPath);
     });
+
+    try {
+      shell.cp("-r", path.join(__dirname, "tools"), installPath);
+    } catch (err) {
+      debug(err);
+    }
   }
 }
 

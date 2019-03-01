@@ -1,0 +1,19 @@
+{
+  "name": "firepit-tools",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "freeze": "rm -rf mirror node_modules && node ./yarn-1.14.0.js install --use-yarnrc=yarnrc --no-default-rc && node ./yarn-1.14.0.js cache clean && rm -rf node_modules package-lock.json",
+    "unfreeze": "node ./yarn-1.14.0.js install --use-yarnrc=yarnrc --no-default-rc --offline"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "yarn": "^1.13.0"
+  },
+  "dependencies": {
+    "firebase-tools": "^6.4.0",
+    "npm": "^6.8.0"
+  }
+}

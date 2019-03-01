@@ -5,5 +5,8 @@ Firepit is a standalone, portable version of the Firebase CLI which has no depen
 ## Downloads
 * [Latest release](https://github.com/abehaskins/firepit/releases/latest)
 
+## Contributing
+Only use `yarn` for modifying this package, otherwise you'll see conflicts.
+
 ## Credits
 *This is not an official Google product.*
