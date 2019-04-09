@@ -38,35 +38,27 @@ let runtimeBinsPath = path.join(homePath, ".cache", "firebase", "bin");
 let safeNodePath;
 const unsafeNodePath = process.argv[0];
 
-const isFileDebug = process.argv.indexOf("--pit:file-debug") !== -1;
-if (isFileDebug) {
-  process.argv.splice(process.argv.indexOf("--pit:file-debug"), 1);
-}
+const flagDefinitions = [
+  "file-debug",
+  "log-debug",
+  "disable-write",
+  "runtime-check",
+  "setup-check",
+  "force-setup"
+];
 
-const isLogDebug = process.argv.indexOf("--pit:log-debug") !== -1;
-if (isLogDebug) {
-  process.argv.splice(process.argv.indexOf("--pit:log-debug"), 1);
-}
+const flags = flagDefinitions.reduce((flags, name) => {
+  flags[name] = process.argv.indexOf(`--pit:${name}`) !== -1;
+  if (flags[name]) {
+    process.argv.splice(process.argv.indexOf(`--pit:${name}`), 1);
+  }
 
-const isWriter = process.argv.indexOf("--pit:disable-write") === -1;
-if (!isWriter) {
-  process.argv.splice(process.argv.indexOf("--pit:disable-write"), 1);
-}
+  return flags;
+}, {});
 
-const isRuntimeCheck = process.argv.indexOf("--pit:runtime-check") !== -1;
-if (isRuntimeCheck) {
+if (flags["runtime-check"]) {
   console.log(`firepit invoked for runtime check, exiting subpit.`);
   return;
-}
-
-const isSetupCheck = process.argv.indexOf("--pit:setup-check") !== -1;
-if (isSetupCheck) {
-  process.argv.splice(process.argv.indexOf("--pit:setup-check"), 1);
-}
-
-const isForceSetup = process.argv.indexOf("--pit:force-setup") !== -1;
-if (isForceSetup) {
-  process.argv.splice(process.argv.indexOf("--pit:force-setup"), 1);
 }
 
 const isWindows = process.platform === "win32";
@@ -77,7 +69,7 @@ debug(`Welcome to firepit v${version}!`);
   const isTopLevel = !process.env.FIREPIT_VERSION;
   safeNodePath = await getSafeCrossPlatformPath(isWindows, process.argv[0]);
 
-  if (isSetupCheck) {
+  if (flags["setup-check"]) {
     const bins = FindTool("firebase-tools/lib/bin/firebase");
 
     for (const bin of bins) {
@@ -88,7 +80,7 @@ debug(`Welcome to firepit v${version}!`);
     return;
   }
 
-  if (isForceSetup) {
+  if (flags["force-setup"]) {
     createRuntimeBinaries();
     SetupFirebaseTools();
     return;
@@ -145,7 +137,7 @@ debug(`Welcome to firepit v${version}!`);
     await firepit();
   }
 
-  if (isFileDebug) {
+  if (flags["file-debug"]) {
     fs.writeFileSync("firepit-log.txt", debug.log.join("\n"));
   }
 })().catch(err => {
@@ -340,7 +332,7 @@ node "${
     debug(err);
   }
 
-  if (isWriter) {
+  if (!flags["disable-write"]) {
     Object.keys(runtimeBins).forEach(filename => {
       const runtimeBinPath = path.join(runtimeBinsPath, filename);
       try {
@@ -404,7 +396,7 @@ function appendToPath(isWin, pathsToAppend) {
 function debug(...msg) {
   if (!debug.log) debug.log = [];
 
-  if (isLogDebug) {
+  if (flags["log-debug"]) {
     msg.forEach(m => console.log(m));
   } else {
     msg.forEach(m => debug.log.push(m));
