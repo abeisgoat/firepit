@@ -48,9 +48,9 @@ const flagDefinitions = [
 ];
 
 const flags = flagDefinitions.reduce((flags, name) => {
-  flags[name] = process.argv.indexOf(`--pit:${name}`) !== -1;
+  flags[name] = process.argv.indexOf(`--tool:${name}`) !== -1;
   if (flags[name]) {
-    process.argv.splice(process.argv.indexOf(`--pit:${name}`), 1);
+    process.argv.splice(process.argv.indexOf(`--tool:${name}`), 1);
   }
 
   return flags;
@@ -154,7 +154,7 @@ async function VerifyNodePath(nodePath) {
     path.join(__dirname, "check.js")
   );
   return new Promise(resolve => {
-    const cmd = spawn(nodePath, [runtimeCheckPath, "--pit:runtime-check"], {
+    const cmd = spawn(nodePath, [runtimeCheckPath, "--tool:runtime-check"], {
       shell: true
     });
 

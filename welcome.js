@@ -64,7 +64,7 @@ async function CheckFirebaseTools() {
       process.stdout.write(`${chalk.green("+")} Calling installer...`);
 
       return new Promise((resolve) => {
-        const install = spawn(firebase_exe, ["--pit:force-setup"], {});
+        const install = spawn(firebase_exe, ["--tool:force-setup"], {});
 
         install.stderr.on("data", (buf) => {
           readline.clearLine(process.stdout, 2);
@@ -85,7 +85,7 @@ async function CheckFirebaseTools() {
 
 async function GetFirebaseToolsBins() {
   return new Promise((resolve) => {
-    const checkSpawn = spawn(firebase_exe, ["--pit:setup-check"]);
+    const checkSpawn = spawn(firebase_exe, ["--tool:setup-check"]);
     let checkSpawnData = "";
 
     checkSpawn.stdout.on("data", (buf) => {
