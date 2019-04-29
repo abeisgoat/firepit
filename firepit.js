@@ -24,11 +24,10 @@ const runtime = require("./runtime");
 const version = require("./package.json").version;
 
 function SetWindowTitle(title) {
-  if (process.platform === 'win32') {
+  if (process.platform === "win32") {
     process.title = title;
   } else {
-    process.stdout.write('\x1b]2;' + title + '\x1b\x5c');
-
+    process.stdout.write("\x1b]2;" + title + "\x1b\x5c");
   }
 }
 
@@ -77,7 +76,7 @@ debug(`Welcome to firepit v${version}!`);
       bins[bin] = await getSafeCrossPlatformPath(bins[bin]);
     }
 
-    console.log(JSON.stringify({bins}));
+    console.log(JSON.stringify({ bins }));
     return;
   }
 
@@ -268,7 +267,7 @@ function ImitateNPM() {
     ...process.argv.slice(breakerIndex)
   ];
   debug(npmArgs);
-  return new Promise((resolve) => {
+  return new Promise(resolve => {
     const cmd = fork(FindTool("npm/bin/npm-cli")[0], npmArgs, {
       stdio: "inherit",
       env: process.env
@@ -284,7 +283,7 @@ function ImitateNode() {
   debug("Detected is:node flag, calling node");
   const breakerIndex = process.argv.indexOf("is:node") + 1;
   const nodeArgs = [...process.argv.slice(breakerIndex)];
-  return new Promise((resolve) => {
+  return new Promise(resolve => {
     const cmd = fork(nodeArgs[0], nodeArgs.slice(1), {
       stdio: "inherit",
       env: process.env
@@ -313,10 +312,10 @@ function SetupFirebaseTools() {
 
 function ImitateFirebaseTools(binPath) {
   debug("Detected no special flags, calling firebase-tools");
-  return new Promise((resolve) => {
+  return new Promise(resolve => {
     const cmd = fork(binPath, process.argv.slice(2), {
       stdio: "inherit",
-      env: {...process.env, FIREPIT_VERSION: version}
+      env: { ...process.env, FIREPIT_VERSION: version }
     });
     cmd.on("close", () => {
       debug(`firebase-tools is done.`);
