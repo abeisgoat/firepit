@@ -44,7 +44,8 @@ const flagDefinitions = [
   "disable-write",
   "runtime-check",
   "setup-check",
-  "force-setup"
+  "force-setup",
+  "force-update"
 ];
 
 const flags = flagDefinitions.reduce((flags, name) => {
@@ -78,6 +79,21 @@ debug(`Welcome to firepit v${version}!`);
 
     console.log(JSON.stringify({bins}));
     return;
+  }
+
+  if (flags["force-update"]) {
+    console.log(`Please wait while we clear npm's cache...`);
+    process.argv = [
+      ...process.argv.slice(0, 2),
+      "is:npm",
+      "cache",
+      "clean",
+      "--force"
+    ];
+    await ImitateNPM();
+    flags["force-setup"] = true;
+    console.log(`Trashing old lib/ folder...`);
+    shell.rm("-rf", installPath);
   }
 
   if (flags["force-setup"]) {
@@ -248,15 +264,19 @@ function ImitateNPM() {
   const npmArgs = [
     `--script-shell=${runtimeBinsPath}/shell${isWindows ? ".bat" : ""}`,
     `--globalconfig=${path.join(runtimeBinsPath, "npmrc")}`,
+    `--userconfig=${path.join(runtimeBinsPath, "npmrc")}`,
     ...process.argv.slice(breakerIndex)
   ];
   debug(npmArgs);
-  const cmd = fork(FindTool("npm/bin/npm-cli")[0], npmArgs, {
-    stdio: "inherit",
-    env: process.env
-  });
-  cmd.on("close", () => {
-    debug(`faux-npm done.`);
+  return new Promise((resolve) => {
+    const cmd = fork(FindTool("npm/bin/npm-cli")[0], npmArgs, {
+      stdio: "inherit",
+      env: process.env
+    });
+    cmd.on("close", () => {
+      debug(`faux-npm done.`);
+      resolve();
+    });
   });
 }
 
@@ -264,12 +284,15 @@ function ImitateNode() {
   debug("Detected is:node flag, calling node");
   const breakerIndex = process.argv.indexOf("is:node") + 1;
   const nodeArgs = [...process.argv.slice(breakerIndex)];
-  const cmd = fork(nodeArgs[0], nodeArgs.slice(1), {
-    stdio: "inherit",
-    env: process.env
-  });
-  cmd.on("close", () => {
-    debug(`faux-node done.`);
+  return new Promise((resolve) => {
+    const cmd = fork(nodeArgs[0], nodeArgs.slice(1), {
+      stdio: "inherit",
+      env: process.env
+    });
+    cmd.on("close", () => {
+      debug(`faux-node done.`);
+      resolve();
+    });
   });
 }
 
@@ -290,12 +313,15 @@ function SetupFirebaseTools() {
 
 function ImitateFirebaseTools(binPath) {
   debug("Detected no special flags, calling firebase-tools");
-  const cmd = fork(binPath, process.argv.slice(2), {
-    stdio: "inherit",
-    env: { ...process.env, FIREPIT_VERSION: version }
-  });
-  cmd.on("close", () => {
-    debug(`firebase-tools is done.`);
+  return new Promise((resolve) => {
+    const cmd = fork(binPath, process.argv.slice(2), {
+      stdio: "inherit",
+      env: {...process.env, FIREPIT_VERSION: version}
+    });
+    cmd.on("close", () => {
+      debug(`firebase-tools is done.`);
+      resolve();
+    });
   });
 }
 
