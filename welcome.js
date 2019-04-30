@@ -15,17 +15,13 @@
 const spawn = require("child_process").spawn;
 const fork = require("child_process").fork;
 const readline = require("readline");
-// const rl = readline.createInterface({
-//   input: process.stdin,
-//   output: process.stdout
-// });
 
 const chalk = require("chalk");
-const banner = `     ######## #### ########  ######## ########     ###     ######  ########  ##
-     ##        ##  ##     ## ##       ##     ##  ##   ##  ##       ##        ##
-     ######    ##  ########  ######   ########  #########  ######  ######    ##
-     ##        ##  ##    ##  ##       ##     ## ##     ##       ## ##       
-     ##       #### ##     ## ######## ########  ##     ##  ######  ########  ##
+const banner = `   ######## #### ########  ######## ########     ###     ######  ########  ##
+   ##        ##  ##     ## ##       ##     ##  ##   ##  ##       ##        ##
+   ######    ##  ########  ######   ########  #########  ######  ######    ##
+   ##        ##  ##    ##  ##       ##     ## ##     ##       ## ##       
+   ##       #### ##     ## ######## ########  ##     ##  ######  ########  ##
  `;
 const firebase_exe = process.argv[2];
 let firebase_bin;
@@ -82,7 +78,12 @@ async function CheckFirebaseTools() {
     process.stdout.write(`${chalk.green("+")} Calling installer...`);
 
     return new Promise(resolve => {
-      const install = spawn(firebase_exe, ["--tool:force-setup"], {});
+      const exe_split = firebase_exe.split(" ");
+      const install = spawn(
+        exe_split[0],
+        [...exe_split.slice(1), "--tool:force-setup"],
+        {}
+      );
 
       install.stderr.on("data", buf => {
         readline.clearLine(process.stdout, 2);
@@ -113,7 +114,11 @@ async function CheckFirebaseTools() {
 
 async function GetFirebaseToolsBins() {
   return new Promise(resolve => {
-    const checkSpawn = spawn(firebase_exe, ["--tool:setup-check"]);
+    const exe_split = firebase_exe.split(" ");
+    const checkSpawn = spawn(exe_split[0], [
+      ...exe_split.slice(1),
+      "--tool:setup-check"
+    ]);
     let checkSpawnData = "";
 
     checkSpawn.stdout.on("data", buf => {

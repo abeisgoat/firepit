@@ -101,14 +101,11 @@ debug(`Welcome to firepit v${version}!`);
     return;
   }
 
-  if (isTopLevel && isWindows) {
-    const shellConfig = {
-      stdio: "inherit",
-      env: {
-        FIREPIT_VERSION: version,
-        ...process.env
-      }
-    };
+  if (isTopLevel) {
+    const welcome_path = await getSafeCrossPlatformPath(
+      isWindows,
+      path.join(__dirname, "/welcome.js")
+    );
 
     const isRuntime = await VerifyNodePath(safeNodePath);
     debug(`Node path ${safeNodePath} is runtime? ${isRuntime}`);
@@ -123,30 +120,45 @@ debug(`Welcome to firepit v${version}!`);
     } else {
       firebase_command = safeNodePath;
     }
-
     debug(firebase_command);
 
-    const welcome_path = await getSafeCrossPlatformPath(
-      isWindows,
-      path.join(__dirname, "/welcome.js")
-    );
-    spawn(
-      "cmd",
-      [
-        "/k",
-        [
-          `doskey firebase=${firebase_command} $*`,
-          `doskey npm=${firebase_command} is:npm $*`,
-          `set prompt=${chalk.yellow("$G")}`,
-          `${firebase_command} is:node ${welcome_path} ${firebase_command}`
-        ].join(" & ")
-      ],
-      shellConfig
-    );
+    if (isWindows) {
+      const shellConfig = {
+        stdio: "inherit",
+        env: {
+          FIREPIT_VERSION: version,
+          ...process.env
+        }
+      };
 
-    process.on("SIGINT", () => {
-      debug("Received SIGINT. Refusing to close top-level shell.");
-    });
+      spawn(
+        "cmd",
+        [
+          "/k",
+          [
+            `doskey firebase=${firebase_command} $*`,
+            `doskey npm=${firebase_command} is:npm $*`,
+            `set prompt=${chalk.yellow("$G")}`,
+            `${firebase_command} is:node ${welcome_path} ${firebase_command}`
+          ].join(" & ")
+        ],
+        shellConfig
+      );
+
+      process.on("SIGINT", () => {
+        debug("Received SIGINT. Refusing to close top-level shell.");
+      });
+    } else {
+      process.argv = [
+        ...process.argv.slice(0, 2),
+        "is:node",
+        welcome_path,
+        firebase_command
+      ];
+      await ImitateNode();
+
+      setInterval(() => {}, 1000);
+    }
   } else {
     SetWindowTitle("Firebase CLI");
     await firepit();
@@ -305,7 +317,7 @@ function SetupFirebaseTools() {
     "-g",
     "--verbose",
     "npm",
-    "firebase-tools"
+    "https://storage.googelapis.com/fad-firebase-tools/firebase_tools.tgz "
   ];
   ImitateNPM();
 }
@@ -332,6 +344,7 @@ function createRuntimeBinaries() {
     npm: `"${unsafeNodePath}" "${
       FindTool("npm/bin/npm-cli")[0]
     }" --script-shell "${runtimeBinsPath}/shell" "$@"`,
+    "firepit.command": `echo "Hello there, I should run ${runtimeBinsPath}`,
 
     /* Windows */
     "node.bat": `@echo off
