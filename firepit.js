@@ -95,8 +95,9 @@ debug(`Welcome to firepit v${version}!`);
     shell.rm("-rf", installPath);
   }
 
+
+  await createRuntimeBinaries();
   if (flags["force-setup"]) {
-    createRuntimeBinaries();
     SetupFirebaseTools();
     return;
   }
@@ -107,28 +108,17 @@ debug(`Welcome to firepit v${version}!`);
       path.join(__dirname, "/welcome.js")
     );
 
-    const isRuntime = await VerifyNodePath(safeNodePath);
-    debug(`Node path ${safeNodePath} is runtime? ${isRuntime}`);
-
-    let firebase_command;
-    if (isRuntime) {
-      const script_path = await getSafeCrossPlatformPath(
-        isWindows,
-        path.join(__dirname, "/firepit.js")
-      );
-      firebase_command = `${safeNodePath} ${script_path}`;
-    } else {
-      firebase_command = safeNodePath;
-    }
-    debug(firebase_command);
+    const firebaseToolsCommand = await getFirebaseToolsCommand();
+    appendToPath(isWindows, [path.join(installPath, "bin"), runtimeBinsPath]);
+    const shellEnv = {
+      FIREPIT_VERSION: version,
+      ...process.env
+    };
 
     if (isWindows) {
       const shellConfig = {
         stdio: "inherit",
-        env: {
-          FIREPIT_VERSION: version,
-          ...process.env
-        }
+        env: shellEnv
       };
 
       spawn(
@@ -136,10 +126,10 @@ debug(`Welcome to firepit v${version}!`);
         [
           "/k",
           [
-            `doskey firebase=${firebase_command} $*`,
-            `doskey npm=${firebase_command} is:npm $*`,
+            `doskey firebase=${firebaseToolsCommand} $*`,
+            `doskey npm=${firebaseToolsCommand} is:npm $*`,
             `set prompt=${chalk.yellow("$G")}`,
-            `${firebase_command} is:node ${welcome_path} ${firebase_command}`
+            `${firebaseToolsCommand} is:node ${welcome_path} ${firebaseToolsCommand}`
           ].join(" & ")
         ],
         shellConfig
@@ -153,11 +143,13 @@ debug(`Welcome to firepit v${version}!`);
         ...process.argv.slice(0, 2),
         "is:node",
         welcome_path,
-        firebase_command
+        firebaseToolsCommand
       ];
       await ImitateNode();
-
-      setInterval(() => {}, 1000);
+      spawn("bash", {
+        env: {...shellEnv, PS1: "\\e[0;33m> \\e[m"},
+        stdio: "inherit"
+      });
     }
   } else {
     SetWindowTitle("Firebase CLI");
@@ -174,6 +166,24 @@ debug(`Welcome to firepit v${version}!`);
   );
   fs.writeFileSync("firepit-log.txt", debug.log.join("\n"));
 });
+
+async function getFirebaseToolsCommand() {
+  const isRuntime = await VerifyNodePath(safeNodePath);
+  debug(`Node path ${safeNodePath} is runtime? ${isRuntime}`);
+
+  let firebase_command;
+  if (isRuntime) {
+    const script_path = await getSafeCrossPlatformPath(
+        isWindows,
+        path.join(__dirname, "/firepit.js")
+    );
+    firebase_command = `${safeNodePath} ${script_path}`; // We should store this as an array to prevent issues with spaces
+  } else {
+    firebase_command = safeNodePath;
+  }
+  debug(firebase_command);
+  return firebase_command;
+}
 
 async function VerifyNodePath(nodePath) {
   const runtimeCheckPath = await getSafeCrossPlatformPath(
@@ -247,7 +257,7 @@ async function firepit() {
   debug(safeNodePath);
   debug(process.argv);
 
-  createRuntimeBinaries();
+  await createRuntimeBinaries();
   appendToPath(isWindows, [runtimeBinsPath]);
 
   if (process.argv.indexOf("is:npm") !== -1) {
@@ -317,7 +327,7 @@ function SetupFirebaseTools() {
     "-g",
     "--verbose",
     "npm",
-    "https://storage.googelapis.com/fad-firebase-tools/firebase_tools.tgz "
+    "firebase-tools"
   ];
   ImitateNPM();
 }
@@ -336,7 +346,7 @@ function ImitateFirebaseTools(binPath) {
   });
 }
 
-function createRuntimeBinaries() {
+async function createRuntimeBinaries() {
   const runtimeBins = {
     /* Linux / OSX */
     shell: `"${unsafeNodePath}"  ${runtimeBinsPath}/shell.js "$@"`,
@@ -344,7 +354,6 @@ function createRuntimeBinaries() {
     npm: `"${unsafeNodePath}" "${
       FindTool("npm/bin/npm-cli")[0]
     }" --script-shell "${runtimeBinsPath}/shell" "$@"`,
-    "firepit.command": `echo "Hello there, I should run ${runtimeBinsPath}`,
 
     /* Windows */
     "node.bat": `@echo off

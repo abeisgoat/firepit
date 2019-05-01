@@ -1,6 +1,6 @@
 {
   "name": "firepit",
-  "version": "0.1.1-dev",
+  "version": "0.2.0-dev",
   "description": "",
   "main": "index.js",
   "scripts": {
@@ -28,6 +28,7 @@
     ]
   },
   "devDependencies": {
+    "pkg": "^4.3.8",
     "prettier": "^1.15.3"
   }
 }
