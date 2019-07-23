@@ -32,8 +32,8 @@ function SetWindowTitle(title) {
 }
 
 const isWindows = process.platform === "win32";
-const installPath = path.join(homePath, ".cache", "firebase", "cli");
-let runtimeBinsPath = path.join(homePath, ".cache", "firebase", "bin");
+const installPath = path.join(homePath, ".cache", "firebase", "tools");
+let runtimeBinsPath = path.join(homePath, ".cache", "firebase", "runtime");
 
 const npmArgs = [
   `--script-shell="${runtimeBinsPath}/shell${isWindows ? ".bat" : ""}"`,
