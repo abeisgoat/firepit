@@ -66,7 +66,7 @@ async function CheckFirebaseTools() {
 
   if (isSetup) {
     console.log(
-      `${chalk.green("+")} Looks like ${chalk.green("your CLI is set up.")}!`
+      `${chalk.green("+")} Looks like ${chalk.green("your CLI is set up")}!`
     );
   } else {
     console.log(
@@ -74,8 +74,8 @@ async function CheckFirebaseTools() {
         "your CLI needs to be set up"
       )}.\n`
     );
-    console.log(`${chalk.cyan("~")} This may take a few minutes`);
-    process.stdout.write(`${chalk.green("+")} Calling installer...`);
+    console.log(`${chalk.cyan("~")} This may take a moment`);
+    process.stdout.write(`${chalk.green("+")} Setting up environment...`);
 
     return new Promise(resolve => {
       const exe_split = firebase_exe.split(" ");

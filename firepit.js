@@ -31,8 +31,16 @@ function SetWindowTitle(title) {
   }
 }
 
+const isWindows = process.platform === "win32";
 const installPath = path.join(homePath, ".cache", "firebase", "cli");
 let runtimeBinsPath = path.join(homePath, ".cache", "firebase", "bin");
+
+const npmArgs = [
+  `--script-shell="${runtimeBinsPath}/shell${isWindows ? ".bat" : ""}"`,
+  `--globalconfig="${path.join(runtimeBinsPath, "npmrc")}"`,
+  `--userconfig="${path.join(runtimeBinsPath, "npmrc")}"`,
+  `--scripts-prepend-node-path="auto"`
+];
 
 let safeNodePath;
 const unsafeNodePath = process.argv[0];
@@ -60,8 +68,6 @@ if (flags["runtime-check"]) {
   console.log(`firepit invoked for runtime check, exiting subpit.`);
   return;
 }
-
-const isWindows = process.platform === "win32";
 
 debug(`Welcome to firepit v${version}!`);
 
@@ -94,7 +100,6 @@ debug(`Welcome to firepit v${version}!`);
     console.log(`Trashing old lib/ folder...`);
     shell.rm("-rf", installPath);
   }
-
 
   await createRuntimeBinaries();
   if (flags["force-setup"]) {
@@ -147,7 +152,7 @@ debug(`Welcome to firepit v${version}!`);
       ];
       await ImitateNode();
       spawn("bash", {
-        env: {...shellEnv, PS1: "\\e[0;33m> \\e[m"},
+        env: { ...shellEnv, PS1: "\\e[0;33m> \\e[m" },
         stdio: "inherit"
       });
     }
@@ -174,8 +179,8 @@ async function getFirebaseToolsCommand() {
   let firebase_command;
   if (isRuntime) {
     const script_path = await getSafeCrossPlatformPath(
-        isWindows,
-        path.join(__dirname, "/firepit.js")
+      isWindows,
+      path.join(__dirname, "/firepit.js")
     );
     firebase_command = `${safeNodePath} ${script_path}`; // We should store this as an array to prevent issues with spaces
   } else {
@@ -282,18 +287,15 @@ async function firepit() {
 function ImitateNPM() {
   debug("Detected is:npm flag, calling NPM");
   const breakerIndex = process.argv.indexOf("is:npm") + 1;
-  const npmArgs = [
-    `--script-shell=${runtimeBinsPath}/shell${isWindows ? ".bat" : ""}`,
-    `--globalconfig=${path.join(runtimeBinsPath, "npmrc")}`,
-    `--userconfig=${path.join(runtimeBinsPath, "npmrc")}`,
-    ...process.argv.slice(breakerIndex)
-  ];
-  debug(npmArgs);
   return new Promise(resolve => {
-    const cmd = fork(FindTool("npm/bin/npm-cli")[0], npmArgs, {
-      stdio: "inherit",
-      env: process.env
-    });
+    const cmd = fork(
+      FindTool("npm/bin/npm-cli")[0],
+      [...npmArgs, ...process.argv.slice(breakerIndex)],
+      {
+        stdio: "inherit",
+        env: process.env
+      }
+    );
     cmd.on("close", () => {
       debug(`faux-npm done.`);
       resolve();
@@ -320,7 +322,26 @@ function ImitateNode() {
 function SetupFirebaseTools() {
   debug(`Attempting to install to "${installPath}"`);
   console.log(`Please wait while the Firebase CLI downloads...`);
-  process.argv = [
+
+  const nodeModulesPath = path.join(installPath, "lib");
+  const binPath = path.join(installPath, "bin");
+  console.log(shell.mkdir("-p", nodeModulesPath));
+  console.log(shell.mkdir("-p", binPath));
+  console.log(
+    shell.cp("-R", path.join(__dirname, "vendor/*"), nodeModulesPath)
+  );
+  console.log(
+    shell.ln(
+      "-sf",
+      path.join(
+        nodeModulesPath,
+        "node_modules/firebase-tools/lib/bin/firebase.js"
+      ),
+      path.join(binPath, "firebase")
+    )
+  );
+
+  /*process.argv = [
     ...process.argv.slice(0, 2),
     "is:npm",
     "install",
@@ -329,7 +350,7 @@ function SetupFirebaseTools() {
     "npm",
     "firebase-tools"
   ];
-  ImitateNPM();
+  ImitateNPM();*/
 }
 
 function ImitateFirebaseTools(binPath) {
@@ -353,7 +374,7 @@ async function createRuntimeBinaries() {
     node: `"${unsafeNodePath}"  ${runtimeBinsPath}/node.js "$@"`,
     npm: `"${unsafeNodePath}" "${
       FindTool("npm/bin/npm-cli")[0]
-    }" --script-shell "${runtimeBinsPath}/shell" "$@"`,
+    }" ${npmArgs.join(" ")} "$@"`,
 
     /* Windows */
     "node.bat": `@echo off
@@ -361,9 +382,7 @@ async function createRuntimeBinaries() {
     "shell.bat": `@echo off
 "${unsafeNodePath}"  ${runtimeBinsPath}\\shell.js %*`,
     "npm.bat": `@echo off
-node "${
-      FindTool("npm/bin/npm-cli")[0]
-    }" --scripts-prepend-node-path="auto" --script-shell "${runtimeBinsPath}\\shell.bat" %*`,
+node "${FindTool("npm/bin/npm-cli")[0]}" ${npmArgs.join(" ")}  %*`,
 
     /* Runtime scripts */
     "shell.js": `${appendToPath.toString()}\n${getSafeCrossPlatformPath.toString()}\n(${runtime.Script_ShellJS.toString()})()`,
