@@ -23,6 +23,14 @@ shell.config.silent = true;
 const runtime = require("./runtime");
 const version = require("./package.json").version;
 
+let config;
+try {
+  config = require("./config");
+} catch (err) {
+  console.warn("Invalid Firepit configuration, this may be a broken build.");
+  process.exit(2);
+}
+
 function SetWindowTitle(title) {
   if (process.platform === "win32") {
     process.title = title;
@@ -107,7 +115,10 @@ debug(`Welcome to firepit v${version}!`);
     return;
   }
 
-  if (isTopLevel) {
+  if (isTopLevel && !config.headless) {
+    /*
+      If firepit is set to be headful then open a shell if needed and spawn the welcome screen
+    */
     const welcome_path = await getSafeCrossPlatformPath(
       isWindows,
       path.join(__dirname, "/welcome.js")
@@ -157,6 +168,9 @@ debug(`Welcome to firepit v${version}!`);
       });
     }
   } else {
+    /*
+      If firepit is set to be headless, then just fall through to the normal flow.
+    */
     SetWindowTitle("Firebase CLI");
     await firepit();
   }
@@ -273,15 +287,21 @@ async function firepit() {
     return ImitateNode();
   }
 
-  const firebaseBins = FindTool("firebase-tools/lib/bin/firebase");
-  if (firebaseBins.length) {
-    const firebaseBin = firebaseBins[0];
-    debug(`CLI install found at "${firebaseBin}", starting fork...`);
-    ImitateFirebaseTools(firebaseBin);
-  } else {
-    debug(`CLI not found! Invoking npm...`);
+  let firebaseBins = FindTool("firebase-tools/lib/bin/firebase");
+  if (!firebaseBins.length) {
+    debug(`CLI not found! Invoking setup...`);
     SetupFirebaseTools();
+    firebaseBins = FindTool("firebase-tools/lib/bin/firebase");
   }
+
+  if (!firebaseBins.length) {
+    console.warn(`firebase-tools setup failed.`);
+    process.exit(2);
+  }
+
+  const firebaseBin = firebaseBins[0];
+  debug(`CLI install found at "${firebaseBin}", starting fork...`);
+  ImitateFirebaseTools(firebaseBin);
 }
 
 function ImitateNPM() {
@@ -321,36 +341,26 @@ function ImitateNode() {
 
 function SetupFirebaseTools() {
   debug(`Attempting to install to "${installPath}"`);
-  console.log(`Please wait while the Firebase CLI downloads...`);
 
   const nodeModulesPath = path.join(installPath, "lib");
   const binPath = path.join(installPath, "bin");
-  console.log(shell.mkdir("-p", nodeModulesPath));
-  console.log(shell.mkdir("-p", binPath));
-  console.log(
-    shell.cp("-R", path.join(__dirname, "vendor/*"), nodeModulesPath)
+  debug(shell.mkdir("-p", nodeModulesPath).toString());
+  debug(shell.mkdir("-p", binPath).toString());
+  debug(
+    shell.cp("-R", path.join(__dirname, "vendor/*"), nodeModulesPath).toString()
   );
-  console.log(
-    shell.ln(
-      "-sf",
-      path.join(
-        nodeModulesPath,
-        "node_modules/firebase-tools/lib/bin/firebase.js"
-      ),
-      path.join(binPath, "firebase")
-    )
+  debug(
+    shell
+      .ln(
+        "-sf",
+        path.join(
+          nodeModulesPath,
+          "node_modules/firebase-tools/lib/bin/firebase.js"
+        ),
+        path.join(binPath, "firebase")
+      )
+      .toString()
   );
-
-  /*process.argv = [
-    ...process.argv.slice(0, 2),
-    "is:npm",
-    "install",
-    "-g",
-    "--verbose",
-    "npm",
-    "firebase-tools"
-  ];
-  ImitateNPM();*/
 }
 
 function ImitateFirebaseTools(binPath) {

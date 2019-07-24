@@ -1,3 +1,5 @@
 /**/node_modules/**
 firepit-**
+dist/**
 .idea/**
+config.js
