@@ -1,6 +1,10 @@
-#!/usr/bin/env bash
-const { mkdir, cat, cd, rm, find, echo, exec, mv } = require("shelljs");
+#!/usr/bin/env node
+const shelljs = require("shelljs");
+const { mkdir, cat, cd, rm, find, echo, exec, mv, ls} = shelljs;
 const npm = (...args) => exec(["npm", ...args].join(" "));
+const path = require("path");
+
+// shelljs.config.verbose = true;
 
 cd("vendor");
 
@@ -34,7 +38,15 @@ const headless_config = cat("config.template.js").replace(
 echo(headless_config).to("config.js");
 npm("run", "pkg");
 mkdir("-p", "dist/headless");
-mv("dist/firpeit-*", "dist/headless");
+ls("dist/firepit-*").forEach(file => {
+  mv(
+    file,
+    path.join(
+      "dist/headless",
+      path.basename(file).replace("firepit", "firebase-tools")
+    )
+  );
+});
 
 echo("-- Building headed binaries...");
 
@@ -45,4 +57,13 @@ const headful_config = cat("config.template.js").replace(
 echo(headful_config).to("config.js");
 npm("run", "pkg");
 mkdir("-p", "dist/headed");
-mv("dist/firepit-*", "dist/headed");
+
+ls("dist/firepit-*").forEach(file => {
+    mv(
+        file,
+        path.join(
+            "dist/headed",
+            path.basename(file).replace("firepit", "firebase-tools")
+        )
+    );
+});
