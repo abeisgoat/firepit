@@ -83,6 +83,7 @@ debug(`Welcome to firepit v${version}!`);
 (async () => {
   const isTopLevel = !process.env.FIREPIT_VERSION;
   safeNodePath = await getSafeCrossPlatformPath(isWindows, process.argv[0]);
+  uninstallLegacyFirepit();
 
   if (flags["setup-check"]) {
     const bins = FindTool("firebase-tools/lib/bin/firebase");
@@ -198,6 +199,14 @@ debug(`Welcome to firepit v${version}!`);
   );
   fs.writeFileSync("firepit-log.txt", debug.log.join("\n"));
 });
+
+function uninstallLegacyFirepit() {
+  const isLegacy = !shell.ls(path.join(homePath, ".cache", "firebase", "cli")).code;
+
+  if (!isLegacy) return;
+  debug("Legacy firepit detected, clearing it out...");
+  debug(shell.rm("-rf", path.join(homePath, ".cache", "firebase"));
+}
 
 async function getFirebaseToolsCommand() {
   const isRuntime = await VerifyNodePath(safeNodePath);
@@ -374,6 +383,7 @@ async function SetupFirebaseTools() {
       ...process.argv.slice(0, 2),
       "is:npm",
       "install",
+      ...npmArgs,
       "-g",
       "--verbose",
       "npm",

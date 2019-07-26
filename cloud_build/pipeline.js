@@ -59,7 +59,7 @@ echo(pwd());
 echo("-- Building headless binaries...");
 
 const config_template = cat("config.template.js").replace(
-    "firebase_tools_package",
+    "firebase_tools_package_value",
     firebase_tools_package
 );
 
