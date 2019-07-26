@@ -60,7 +60,8 @@ const flagDefinitions = [
   "runtime-check",
   "setup-check",
   "force-setup",
-  "force-update"
+  "force-update",
+  "ignore-embedded-cache"
 ];
 
 const flags = flagDefinitions.reduce((flags, name) => {
@@ -103,7 +104,14 @@ debug(`Welcome to firepit v${version}!`);
       "clean",
       "--force"
     ];
-    await ImitateNPM();
+    const code = await ImitateNPM();
+
+    if (code) {
+      console.log("NPM cache clearing failed, can't update.");
+      process.exit(code);
+    }
+
+    flags["ignore-embedded-cache"] = true;
     flags["force-setup"] = true;
     console.log(`Trashing old lib/ folder...`);
     shell.rm("-rf", installPath);
@@ -111,8 +119,7 @@ debug(`Welcome to firepit v${version}!`);
 
   await createRuntimeBinaries();
   if (flags["force-setup"]) {
-    SetupFirebaseTools();
-    return;
+    await SetupFirebaseTools();
   }
 
   if (isTopLevel && !config.headless) {
@@ -161,7 +168,13 @@ debug(`Welcome to firepit v${version}!`);
         welcome_path,
         firebaseToolsCommand
       ];
-      await ImitateNode();
+      const code = await ImitateNode();
+
+      if (code) {
+        console.log("Node failed to run welcome script.");
+        process.exit(code);
+      }
+
       spawn("bash", {
         env: { ...shellEnv, PS1: "\\e[0;33m> \\e[m" },
         stdio: "inherit"
@@ -280,17 +293,23 @@ async function firepit() {
   appendToPath(isWindows, [runtimeBinsPath]);
 
   if (process.argv.indexOf("is:npm") !== -1) {
-    return ImitateNPM();
+    const code = await ImitateNPM();
+    if (code) {
+      process.exit(code);
+    }
   }
 
   if (process.argv.indexOf("is:node") !== -1) {
-    return ImitateNode();
+    const code = await ImitateNode();
+    if (code) {
+      process.exit(code);
+    }
   }
 
   let firebaseBins = FindTool("firebase-tools/lib/bin/firebase");
   if (!firebaseBins.length) {
     debug(`CLI not found! Invoking setup...`);
-    SetupFirebaseTools();
+    await SetupFirebaseTools();
     firebaseBins = FindTool("firebase-tools/lib/bin/firebase");
   }
 
@@ -301,7 +320,8 @@ async function firepit() {
 
   const firebaseBin = firebaseBins[0];
   debug(`CLI install found at "${firebaseBin}", starting fork...`);
-  ImitateFirebaseTools(firebaseBin);
+  const code = await ImitateFirebaseTools(firebaseBin);
+  process.exit(code);
 }
 
 function ImitateNPM() {
@@ -316,9 +336,9 @@ function ImitateNPM() {
         env: process.env
       }
     );
-    cmd.on("close", () => {
+    cmd.on("close", (code) => {
       debug(`faux-npm done.`);
-      resolve();
+      resolve(code);
     });
   });
 }
@@ -332,35 +352,56 @@ function ImitateNode() {
       stdio: "inherit",
       env: process.env
     });
-    cmd.on("close", () => {
+    cmd.on("close", (code) => {
       debug(`faux-node done.`);
-      resolve();
+      resolve(code);
     });
   });
 }
 
-function SetupFirebaseTools() {
+async function SetupFirebaseTools() {
   debug(`Attempting to install to "${installPath}"`);
 
   const nodeModulesPath = path.join(installPath, "lib");
   const binPath = path.join(installPath, "bin");
   debug(shell.mkdir("-p", nodeModulesPath).toString());
   debug(shell.mkdir("-p", binPath).toString());
-  debug(
-    shell.cp("-R", path.join(__dirname, "vendor/*"), nodeModulesPath).toString()
-  );
-  debug(
-    shell
-      .ln(
-        "-sf",
-        path.join(
-          nodeModulesPath,
-          "node_modules/firebase-tools/lib/bin/firebase.js"
-        ),
-        path.join(binPath, "firebase")
-      )
-      .toString()
-  );
+
+  if (flags["ignore-embedded-cache"]) {
+    debug("Using remote for slow install...");
+    // Install remotely
+    process.argv = [
+      ...process.argv.slice(0, 2),
+      "is:npm",
+      "install",
+      "-g",
+      "--verbose",
+      "npm",
+      config.firebase_tools_package
+    ];
+    const code = await ImitateNPM();
+    if (code) {
+      console.log("Setup from remote host failed due to npm error.");
+      process.exit(code);
+    }
+  } else {
+    debug("Using embedded cache for quick install...");
+    debug(
+        shell.cp("-R", path.join(__dirname, "vendor/*"), nodeModulesPath).toString()
+    );
+    debug(
+        shell
+            .ln(
+                "-sf",
+                path.join(
+                    nodeModulesPath,
+                    "node_modules/firebase-tools/lib/bin/firebase.js"
+                ),
+                path.join(binPath, "firebase")
+            )
+            .toString()
+    );
+  }
 }
 
 function ImitateFirebaseTools(binPath) {
@@ -370,9 +411,9 @@ function ImitateFirebaseTools(binPath) {
       stdio: "inherit",
       env: { ...process.env, FIREPIT_VERSION: version }
     });
-    cmd.on("close", () => {
+    cmd.on("close", (code) => {
       debug(`firebase-tools is done.`);
-      resolve();
+      resolve(code);
     });
   });
 }

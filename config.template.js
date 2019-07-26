@@ -8,5 +8,12 @@ module.exports = {
     which allows the binary to spawn a terminal on Windows and Mac. The is the
     behavior for desktop users.
   */
-  headless: headless_value
+  headless: headless_value,
+
+  /*
+    This is generally set to "firebase-tools@latest" however a custom value
+    can be supplied for EAPs which would like to have builds pointed at
+    specific tgz bundles
+   */
+  firebase_tools_package: firebase_tools_package_value
 };

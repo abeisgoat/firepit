@@ -1,7 +1,14 @@
 #!/usr/bin/env node
 const shelljs = require("shelljs");
 const path = require("path");
+const argv = require('yargs').argv
 const { mkdir, cat, cd, rm, find, echo, exec, mv, ls, pwd, tempdir } = shelljs;
+
+//https://storage.googleapis.com/fad-firebase-tools/firebase_tools.tgz
+
+const isPublishing = argv.publish;
+const firebase_tools_package = argv.package;
+const release_tag = argv.tag;
 
 shelljs.config.fatal = true;
 
@@ -19,7 +26,7 @@ cd("firepit_pipeline");
 const workdir = pwd();
 
 npm("init", "-y");
-npm("install", `firebase-tools@${process.argv[2]}`);
+npm("install", firebase_tools_package);
 
 try {
   mv("node_modules/firebase_tools/firepit", "firepit");
@@ -51,7 +58,12 @@ echo(pwd());
 
 echo("-- Building headless binaries...");
 
-const headless_config = cat("config.template.js").replace(
+const config_template = cat("config.template.js").replace(
+    "firebase_tools_package",
+    firebase_tools_package
+);
+
+const headless_config = config_template.replace(
   "headless_value",
   "true"
 );
@@ -69,7 +81,7 @@ ls("dist/firepit-*").forEach(file => {
 
 echo("-- Building headed binaries...");
 
-const headful_config = cat("config.template.js").replace(
+const headful_config = config_template.replace(
   "headless_value",
   "false"
 );
@@ -86,15 +98,20 @@ ls("dist/firepit-*").forEach(file => {
   );
 });
 
-// Temporary hack to release to hub-release-playground instead of prod
-hub("clone", "abeisgoat/hub-release-playground");
-cd("hub-release-playground");
-// EOHack
+if (isPublishing) {
+  echo("Publishing...");
+  // Temporary hack to release to hub-release-playground instead of prod
+  hub("clone", "abeisgoat/hub-release-playground");
+  cd("hub-release-playground");
+  // EOHack
 
-ls("../dist").forEach((filename) => {
-  hub("release", "edit", "-m", '""', "-a", path.join("../dist", filename), `v${process.argv[2]}`);
-});
-cd("..");
+  ls("../dist").forEach((filename) => {
+    hub("release", "edit", "-m", '""', "-a", path.join("../dist", filename), release_tag);
+  });
+  cd("..");
+} else {
+  echo("Skipping publishing...");
+}
 
 echo("-- Artifacts");
 console.log(ls("-R", "dist").join("\n"));
