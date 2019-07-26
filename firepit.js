@@ -383,7 +383,6 @@ async function SetupFirebaseTools() {
       ...process.argv.slice(0, 2),
       "is:npm",
       "install",
-      ...npmArgs,
       "-g",
       "--verbose",
       "npm",
@@ -399,19 +398,20 @@ async function SetupFirebaseTools() {
     debug(
         shell.cp("-R", path.join(__dirname, "vendor/*"), nodeModulesPath).toString()
     );
-    debug(
-        shell
-            .ln(
-                "-sf",
-                path.join(
-                    nodeModulesPath,
-                    "node_modules/firebase-tools/lib/bin/firebase.js"
-                ),
-                path.join(binPath, "firebase")
-            )
-            .toString()
-    );
   }
+  
+  debug(
+      shell
+          .ln(
+              "-sf",
+              path.join(
+                  nodeModulesPath,
+                  "node_modules/firebase-tools/lib/bin/firebase.js"
+              ),
+              path.join(binPath, "firebase")
+          )
+          .toString()
+  );
 }
 
 function ImitateFirebaseTools(binPath) {
