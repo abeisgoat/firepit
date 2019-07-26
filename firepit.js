@@ -205,7 +205,7 @@ function uninstallLegacyFirepit() {
 
   if (!isLegacy) return;
   debug("Legacy firepit detected, clearing it out...");
-  debug(shell.rm("-rf", path.join(homePath, ".cache", "firebase"));
+  debug(shell.rm("-rf", path.join(homePath, ".cache", "firebase")));
 }
 
 async function getFirebaseToolsCommand() {
