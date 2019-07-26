@@ -2,11 +2,16 @@
 const shelljs = require("shelljs");
 const path = require("path");
 const argv = require('yargs').argv
-const { mkdir, cat, cd, rm, find, echo, exec, mv, ls, pwd, tempdir } = shelljs;
+const { mkdir, cat, cd, rm, find, echo, exec, mv, ls, pwd, tempdir, cp } = shelljs;
 
 //https://storage.googleapis.com/fad-firebase-tools/firebase_tools.tgz
 
 const isPublishing = argv.publish;
+const isLocalFirepit = argv.local;
+const styles = (argv.styles || "headless,headful").split(",").map((s) => s.trim()).reduce((m, v) => {
+  m[v] = true;
+  return m;
+}, {});
 const firebase_tools_package = argv.package;
 const release_tag = argv.tag;
 
@@ -28,15 +33,26 @@ const workdir = pwd();
 npm("init", "-y");
 npm("install", firebase_tools_package);
 
-try {
-  mv("node_modules/firebase_tools/firepit", "firepit");
-} catch (err) {
-  console.warn(
-    "Couldn't pull firepit from firebase-tools, using standalone repo."
-  );
-  git("clone", "https://github.com/abeisgoat/firepit.git");
+if (isLocalFirepit) {
+  echo("Using local firepit for testing...");
+  mkdir("firepit");
+  rm("-rf", path.join(__dirname, "../vendor/node_modules"));
+  rm("-rf", path.join(__dirname, "../node_modules"));
+
+  cp(path.join(__dirname, "../*.j*"), "firepit/");
+  cp("-R", path.join(__dirname, "../vendor"), "firepit/vendor");
+} else {
+  try {
+    echo("Attempting to use firebase_tools/fireput...");
+    mv("node_modules/firebase_tools/firepit", "firepit");
+    echo("Success!");
+  } catch (err) {
+    echo("Failure... Pulling firepit repo...");
+    git("clone", "https://github.com/abeisgoat/firepit.git");
+  }
 }
 
+echo("Setting up firepit dev deps...");
 cd("firepit");
 npm("install");
 
@@ -56,47 +72,51 @@ find(".")
 cd("..");
 echo(pwd());
 
-echo("-- Building headless binaries...");
+if (styles.headless) {
+  echo("-- Building headless binaries...");
 
-const config_template = cat("config.template.js").replace(
-    "firebase_tools_package_value",
-    firebase_tools_package
-);
-
-const headless_config = config_template.replace(
-  "headless_value",
-  "true"
-);
-echo(headless_config).to("config.js");
-npm("run", "pkg");
-ls("dist/firepit-*").forEach(file => {
-  mv(
-    file,
-    path.join(
-      "dist",
-      path.basename(file).replace("firepit", "firebase-tools-headless")
-    )
+  const config_template = cat("config.template.js").replace(
+      "firebase_tools_package_value",
+      firebase_tools_package
   );
-});
 
-echo("-- Building headed binaries...");
-
-const headful_config = config_template.replace(
-  "headless_value",
-  "false"
-);
-echo(headful_config).to("config.js");
-npm("run", "pkg");
-
-ls("dist/firepit-*").forEach(file => {
-  mv(
-    file,
-    path.join(
-      "dist",
-      path.basename(file).replace("firepit", "firebase-tools-headed")
-    )
+  const headless_config = config_template.replace(
+      "headless_value",
+      "true"
   );
-});
+  echo(headless_config).to("config.js");
+  npm("run", "pkg");
+  ls("dist/firepit-*").forEach(file => {
+    mv(
+        file,
+        path.join(
+            "dist",
+            path.basename(file).replace("firepit", "firebase-tools-headless")
+        )
+    );
+  });
+}
+
+if (styles.headful) {
+  echo("-- Building headed binaries...");
+
+  const headful_config = config_template.replace(
+      "headless_value",
+      "false"
+  );
+  echo(headful_config).to("config.js");
+  npm("run", "pkg");
+
+  ls("dist/firepit-*").forEach(file => {
+    mv(
+        file,
+        path.join(
+            "dist",
+            path.basename(file).replace("firepit", "firebase-tools-headed")
+        )
+    );
+  });
+}
 
 if (isPublishing) {
   echo("Publishing...");

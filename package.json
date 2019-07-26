@@ -12,7 +12,7 @@
   "license": "ISC",
   "dependencies": {
     "chalk": "^2.4.2",
-    "npm": "^6.1.0",
+    "npm": "^6.10.2",
     "shelljs": "^0.8.3",
     "user-home": "^2.0.0"
   },

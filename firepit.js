@@ -44,10 +44,10 @@ const installPath = path.join(homePath, ".cache", "firebase", "tools");
 let runtimeBinsPath = path.join(homePath, ".cache", "firebase", "runtime");
 
 const npmArgs = [
-  `--script-shell="${runtimeBinsPath}/shell${isWindows ? ".bat" : ""}"`,
-  `--globalconfig="${path.join(runtimeBinsPath, "npmrc")}"`,
-  `--userconfig="${path.join(runtimeBinsPath, "npmrc")}"`,
-  `--scripts-prepend-node-path="auto"`
+  `--script-shell=${runtimeBinsPath}/shell${isWindows ? ".bat" : ""}`,
+  `--globalconfig=${path.join(runtimeBinsPath, "npmrc")}`,
+  `--userconfig=${path.join(runtimeBinsPath, "npmrc")}`,
+  `--scripts-prepend-node-path=auto`
 ];
 
 let safeNodePath;
@@ -120,7 +120,10 @@ debug(`Welcome to firepit v${version}!`);
 
   await createRuntimeBinaries();
   if (flags["force-setup"]) {
+    debug("Forcing setup...");
     await SetupFirebaseTools();
+    console.log("firebase-tools setup complete.");
+    return;
   }
 
   if (isTopLevel && !config.headless) {
@@ -322,11 +325,6 @@ async function firepit() {
     firebaseBins = FindTool("firebase-tools/lib/bin/firebase");
   }
 
-  if (!firebaseBins.length) {
-    console.warn(`firebase-tools setup failed.`);
-    process.exit(2);
-  }
-
   const firebaseBin = firebaseBins[0];
   debug(`CLI install found at "${firebaseBin}", starting fork...`);
   const code = await ImitateFirebaseTools(firebaseBin);
@@ -336,10 +334,12 @@ async function firepit() {
 function ImitateNPM() {
   debug("Detected is:npm flag, calling NPM");
   const breakerIndex = process.argv.indexOf("is:npm") + 1;
+  const args = [...npmArgs, ...process.argv.slice(breakerIndex)];
+  debug(args.join(" "));
   return new Promise(resolve => {
     const cmd = fork(
       FindTool("npm/bin/npm-cli")[0],
-      [...npmArgs, ...process.argv.slice(breakerIndex)],
+      args,
       {
         stdio: "inherit",
         env: process.env
@@ -371,6 +371,7 @@ function ImitateNode() {
 async function SetupFirebaseTools() {
   debug(`Attempting to install to "${installPath}"`);
 
+  const original_argv = [...process.argv];
   const nodeModulesPath = path.join(installPath, "lib");
   const binPath = path.join(installPath, "bin");
   debug(shell.mkdir("-p", nodeModulesPath).toString());
@@ -384,7 +385,6 @@ async function SetupFirebaseTools() {
       "is:npm",
       "install",
       "-g",
-      "--verbose",
       "npm",
       config.firebase_tools_package
     ];
@@ -399,7 +399,7 @@ async function SetupFirebaseTools() {
         shell.cp("-R", path.join(__dirname, "vendor/*"), nodeModulesPath).toString()
     );
   }
-  
+
   debug(
       shell
           .ln(
@@ -412,6 +412,13 @@ async function SetupFirebaseTools() {
           )
           .toString()
   );
+
+  if (!FindTool("firebase-tools/lib/bin/firebase").length) {
+    console.warn(`firebase-tools setup failed.`);
+    process.exit(2);
+  }
+
+  process.argv = original_argv;
 }
 
 function ImitateFirebaseTools(binPath) {
@@ -471,6 +478,7 @@ node "${FindTool("npm/bin/npm-cli")[0]}" ${npmArgs.join(" ")}  %*`,
       shell.chmod("+x", runtimeBinPath);
     });
   }
+  debug("Runtime binaries created.");
 }
 
 /*
