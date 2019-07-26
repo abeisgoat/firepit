@@ -15,5 +15,5 @@ module.exports = {
     can be supplied for EAPs which would like to have builds pointed at
     specific tgz bundles
    */
-  firebase_tools_package: firebase_tools_package_value
+  firebase_tools_package: "firebase_tools_package_value"
 };
